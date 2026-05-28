@@ -8,3 +8,4 @@ instance/
 .pytest_cache/
 *.log
 server.log
+*.xlsx
