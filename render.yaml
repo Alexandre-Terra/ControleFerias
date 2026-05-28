@@ -25,6 +25,6 @@ services:
 
 databases:
   - name: controle-ferias-db
-    plan: starter
+    plan: basic-256mb        # equivalente atual ao antigo 'starter' (descontinuado)
     databaseName: controle_ferias
     user: controle_ferias
