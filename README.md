@@ -75,7 +75,7 @@ pytest -q
 
 > O Postgres do Railway entrega `DATABASE_URL` no formato `postgresql://…` —
 > `app/config.py` normaliza para `postgresql+psycopg://` automaticamente.
-> A versão do Python vem de `runtime.txt` (lida pelo Nixpacks).
+> A versão do Python vem de `.python-version` (lida pelo Railpack).
 
 ## Estrutura
 

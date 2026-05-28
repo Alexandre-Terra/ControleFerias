@@ -10,7 +10,7 @@ Dados originais vêm da planilha `Controle_Ferias_Master_Geral.xlsx` (3 empresas
 
 ## Stack
 
-- Python 3.12 (3.14 funciona localmente com SQLite). Railway usa 3.12 — ver `runtime.txt`.
+- Python 3.12 (3.14 funciona localmente com SQLite). Railway usa 3.12 — ver `.python-version`.
 - Flask 3 + Flask-SQLAlchemy 3 + Flask-Migrate + Flask-WTF.
 - SQLAlchemy 2 / psycopg 3 em prod; SQLite local.
 - Jinja2 + Tailwind (CDN, sem build).
@@ -83,7 +83,7 @@ Precedência (pior caso primeiro): `VENCIDA > A_VENCER > TEM_DIREITO > PROGRAMAD
 
 ## Deploy (Railway)
 
-- `railway.toml` define builder Nixpacks e `startCommand` (`flask db upgrade && gunicorn ...`).
+- `railway.toml` define builder Railpack e `startCommand` (`flask db upgrade && gunicorn ...`).
 - `Procfile` espelha o `startCommand` para compatibilidade com qualquer detecção alternativa.
 - Postgres é um **plugin separado** no mesmo projeto Railway — vincular via `DATABASE_URL=${{ Postgres.DATABASE_URL }}` no painel de Variables do serviço web.
 - Variáveis a configurar manualmente no painel: `DATABASE_URL`, `SECRET_KEY`, `APP_PASSWORD`, `FLASK_APP=app:create_app`, `TZ=America/Sao_Paulo`, `ALERTA_A_VENCER_DIAS` (opcional).
