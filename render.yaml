@@ -25,6 +25,7 @@ services:
 
 databases:
   - name: controle-ferias-db
-    plan: basic-256mb        # equivalente atual ao antigo 'starter' (descontinuado)
+    plan: basic-256mb        # 256MB de RAM
+    diskSizeGB: 1            # 1GB de armazenamento
     databaseName: controle_ferias
     user: controle_ferias
