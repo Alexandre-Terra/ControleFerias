@@ -42,9 +42,9 @@ Acesse http://localhost:5000 e entre com a senha de `APP_PASSWORD`.
 pytest -q
 ```
 
-## Deploy no Render
+## Deploy no Railway
 
-1. Suba o repositório no GitHub (o `render.yaml` já está incluído):
+1. Suba o repositório no GitHub (o `railway.toml` e o `Procfile` já estão incluídos):
    ```powershell
    git init
    git add -A
@@ -54,18 +54,28 @@ pytest -q
    git push -u origin main
    ```
    Garanta que a pasta `migrations/` entre no commit (ela não está no `.gitignore`).
-2. No Render, crie um **Blueprint** apontando para o repositório — ele provisiona
-   o web service + Postgres automaticamente.
-3. Defina `APP_PASSWORD` no painel (marcado como `sync: false`).
-4. A cada deploy, `flask db upgrade` cria/atualiza o schema.
-5. Import inicial (uma vez), via Render Shell:
+2. No Railway, crie um **New Project → Deploy from GitHub repo** apontando para
+   o repositório. Em seguida, dentro do mesmo projeto, adicione um plugin
+   **Postgres** (`+ New → Database → PostgreSQL`).
+3. No serviço web, em **Variables**, defina:
+   - `DATABASE_URL` = `${{ Postgres.DATABASE_URL }}` (referência ao plugin)
+   - `SECRET_KEY` = uma chave aleatória forte
+   - `APP_PASSWORD` = a senha de acesso compartilhada
+   - `FLASK_APP` = `app:create_app`
+   - `TZ` = `America/Sao_Paulo`
+   - `ALERTA_A_VENCER_DIAS` = `60` (opcional, padrão 60)
+4. Em **Settings → Networking**, clique **Generate Domain** para expor o serviço.
+5. A cada deploy, `flask db upgrade` cria/atualiza o schema (definido no
+   `startCommand` do `railway.toml`).
+6. Import inicial (uma vez): conecte-se ao serviço via Railway CLI e rode
    ```
-   flask import-xlsx ./Controle_Ferias_Master_Geral.xlsx
+   railway run flask import-xlsx ./Controle_Ferias_Master_Geral.xlsx
    ```
+   ou execute pelo painel em **Deployments → … → Run Command**.
 
-> O plano **free** do Postgres expira em 90 dias; use **Starter** para uso real.
-> `DATABASE_URL` do Render é normalizada para `postgresql+psycopg://`
-> automaticamente em `app/config.py`.
+> O Postgres do Railway entrega `DATABASE_URL` no formato `postgresql://…` —
+> `app/config.py` normaliza para `postgresql+psycopg://` automaticamente.
+> A versão do Python vem de `runtime.txt` (lida pelo Nixpacks).
 
 ## Estrutura
 

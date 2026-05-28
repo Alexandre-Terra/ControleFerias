@@ -3,8 +3,9 @@ import os
 
 
 def _normalize_db_url(url: str) -> str:
-    """Render entrega ``postgres://``; SQLAlchemy 2 + psycopg querem
-    ``postgresql+psycopg://``. Mantém SQLite e outras URLs intactas."""
+    """Provedores (Railway, Render, Heroku) costumam entregar ``postgres://``
+    ou ``postgresql://``; SQLAlchemy 2 + psycopg querem ``postgresql+psycopg://``.
+    Mantém SQLite e outras URLs intactas."""
     if url.startswith("postgres://"):
         url = url.replace("postgres://", "postgresql+psycopg://", 1)
     elif url.startswith("postgresql://"):

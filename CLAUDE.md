@@ -10,7 +10,7 @@ Dados originais vêm da planilha `Controle_Ferias_Master_Geral.xlsx` (3 empresas
 
 ## Stack
 
-- Python 3.12 (3.14 funciona localmente com SQLite). Render usa 3.12 — ver `runtime.txt`.
+- Python 3.12 (3.14 funciona localmente com SQLite). Railway usa 3.12 — ver `runtime.txt`.
 - Flask 3 + Flask-SQLAlchemy 3 + Flask-Migrate + Flask-WTF.
 - SQLAlchemy 2 / psycopg 3 em prod; SQLite local.
 - Jinja2 + Tailwind (CDN, sem build).
@@ -44,7 +44,7 @@ pytest -q
 ```
 app/
   __init__.py     factory; registra blueprints; injeta STATUS_LABELS/BADGE/hoje no Jinja
-  config.py       env vars; normaliza DATABASE_URL do Render para postgresql+psycopg://
+  config.py       env vars; normaliza DATABASE_URL do provedor (Railway/Render) para postgresql+psycopg://
   models.py       Empresa, Setor, Funcionario, PeriodoAquisitivo, ProgramacaoFerias
   status.py       lógica de status (funções puras, sem DB) — derivada de hoje
   importer.py     parsing do XLSX (multi-linha por funcionário, serial→data, decimais)
@@ -81,13 +81,16 @@ Precedência (pior caso primeiro): `VENCIDA > A_VENCER > TEM_DIREITO > PROGRAMAD
 - Tailwind via CDN — não introduzir build de front-end sem necessidade real.
 - CSRF: `Flask-WTF` é usado nos formulários; rotas POST sem form (`/logout`, `/funcionarios/<id>/setor`) propositalmente não validam CSRF (ferramenta interna). Documentado no README.
 
-## Deploy (Render)
+## Deploy (Railway)
 
-- `render.yaml` provisiona web service + Postgres.
-- `APP_PASSWORD` definido manualmente no painel (sync: false).
-- `flask db upgrade` roda a cada deploy.
-- Import inicial via Render Shell: `flask import-xlsx ./Controle_Ferias_Master_Geral.xlsx`.
-- `DATABASE_URL` do Render começa com `postgres://` — `config.py` normaliza para `postgresql+psycopg://`.
+- `railway.toml` define builder Nixpacks e `startCommand` (`flask db upgrade && gunicorn ...`).
+- `Procfile` espelha o `startCommand` para compatibilidade com qualquer detecção alternativa.
+- Postgres é um **plugin separado** no mesmo projeto Railway — vincular via `DATABASE_URL=${{ Postgres.DATABASE_URL }}` no painel de Variables do serviço web.
+- Variáveis a configurar manualmente no painel: `DATABASE_URL`, `SECRET_KEY`, `APP_PASSWORD`, `FLASK_APP=app:create_app`, `TZ=America/Sao_Paulo`, `ALERTA_A_VENCER_DIAS` (opcional).
+- Domínio público: **Settings → Networking → Generate Domain**.
+- `flask db upgrade` roda a cada deploy (parte do `startCommand`).
+- Import inicial via Railway CLI: `railway run flask import-xlsx ./Controle_Ferias_Master_Geral.xlsx`.
+- `DATABASE_URL` do Railway começa com `postgresql://` — `config.py` normaliza para `postgresql+psycopg://`.
 
 ## Limitações conhecidas (não "corrigir" sem pedir)
 
