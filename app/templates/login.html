@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="max-w-sm mx-auto mt-16 bg-white rounded-lg shadow p-6">
+  <h1 class="text-xl font-semibold mb-1">🏖️ Controle de Férias</h1>
+  <p class="text-sm text-gray-500 mb-5">Acesso dos gestores</p>
+  <form method="post">
+    {{ form.hidden_tag() }}
+    <label class="block text-sm font-medium mb-1">Senha</label>
+    {{ form.senha(class_="w-full border rounded px-3 py-2 mb-4", autofocus=true) }}
+    {{ form.submit(class_="w-full bg-slate-800 text-white rounded py-2 hover:bg-slate-700 cursor-pointer") }}
+  </form>
+</div>
+{% endblock %}

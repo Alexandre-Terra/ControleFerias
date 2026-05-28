@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard · Controle de Férias{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-5">Dashboard de Férias</h1>
+
+<div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+  <div class="bg-white rounded-lg shadow p-4 border-l-4 border-red-500">
+    <div class="text-3xl font-bold text-red-600">{{ cards.vencidas }}</div>
+    <div class="text-sm text-gray-500">Férias vencidas</div>
+  </div>
+  <div class="bg-white rounded-lg shadow p-4 border-l-4 border-yellow-500">
+    <div class="text-3xl font-bold text-yellow-600">{{ cards.a_vencer }}</div>
+    <div class="text-sm text-gray-500">A vencer</div>
+  </div>
+  <div class="bg-white rounded-lg shadow p-4 border-l-4 border-green-500">
+    <div class="text-3xl font-bold text-green-600">{{ cards.tem_direito }}</div>
+    <div class="text-sm text-gray-500">Com direito a férias</div>
+  </div>
+  <div class="bg-white rounded-lg shadow p-4 border-l-4 border-blue-500">
+    <div class="text-3xl font-bold text-blue-600">{{ cards.programadas }}</div>
+    <div class="text-sm text-gray-500">Programadas</div>
+  </div>
+  <div class="bg-white rounded-lg shadow p-4 border-l-4 border-slate-500">
+    <div class="text-3xl font-bold text-slate-700">{{ cards.colaboradores }}</div>
+    <div class="text-sm text-gray-500">Colaboradores</div>
+  </div>
+</div>
+
+<div class="grid md:grid-cols-3 gap-6">
+  <div class="bg-white rounded-lg shadow p-4">
+    <h2 class="font-semibold mb-3">Por empresa</h2>
+    <table class="w-full text-sm">
+      <thead><tr class="text-left text-gray-500 border-b">
+        <th class="py-1">Empresa</th><th>Total</th><th>Venc.</th><th>A venc.</th>
+      </tr></thead>
+      <tbody>
+      {% for nome, d in por_empresa %}
+        <tr class="border-b last:border-0">
+          <td class="py-1">{{ nome }}</td>
+          <td>{{ d.total }}</td>
+          <td class="text-red-600">{{ d.vencidas }}</td>
+          <td class="text-yellow-600">{{ d.a_vencer }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="bg-white rounded-lg shadow p-4">
+    <h2 class="font-semibold mb-3">Por setor</h2>
+    <table class="w-full text-sm">
+      <thead><tr class="text-left text-gray-500 border-b"><th class="py-1">Setor</th><th>Qtd</th></tr></thead>
+      <tbody>
+      {% for nome, qtd in por_setor %}
+        <tr class="border-b last:border-0"><td class="py-1">{{ nome }}</td><td>{{ qtd }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="text-xs text-gray-400 mt-2">Defina o setor de cada funcionário na tela de detalhe.</p>
+  </div>
+
+  <div class="bg-white rounded-lg shadow p-4">
+    <h2 class="font-semibold mb-3">Férias programadas por mês</h2>
+    <table class="w-full text-sm">
+      <tbody>
+      {% for mes, qtd in por_mes %}
+        <tr class="border-b last:border-0">
+          <td class="py-1 w-12">{{ mes }}</td>
+          <td>
+            <div class="bg-blue-500 h-3 rounded inline-block align-middle" style="width: {{ qtd * 18 }}px"></div>
+            <span class="ml-2 text-gray-600">{{ qtd }}</span>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

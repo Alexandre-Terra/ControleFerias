@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% block title %}Funcionários · Controle de Férias{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-4">Funcionários</h1>
+
+<form method="get" class="bg-white rounded-lg shadow p-4 mb-5 grid md:grid-cols-5 gap-3 items-end">
+  <div>
+    <label class="block text-xs text-gray-500 mb-1">Busca (nome/código)</label>
+    <input name="busca" value="{{ filtros.busca }}" class="w-full border rounded px-2 py-1 text-sm">
+  </div>
+  <div>
+    <label class="block text-xs text-gray-500 mb-1">Empresa</label>
+    <select name="empresa" class="w-full border rounded px-2 py-1 text-sm">
+      <option value="">Todas</option>
+      {% for e in empresas %}
+        <option value="{{ e.id }}" {{ 'selected' if filtros.empresa == e.id }}>{{ e.nome }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label class="block text-xs text-gray-500 mb-1">Setor</label>
+    <select name="setor" class="w-full border rounded px-2 py-1 text-sm">
+      <option value="">Todos</option>
+      {% for s in setores %}
+        <option value="{{ s.id }}" {{ 'selected' if filtros.setor == s.id }}>{{ s.nome }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label class="block text-xs text-gray-500 mb-1">Status</label>
+    <select name="status" class="w-full border rounded px-2 py-1 text-sm">
+      <option value="">Todos</option>
+      {% for s in status_opcoes %}
+        <option value="{{ s }}" {{ 'selected' if filtros.status == s }}>{{ STATUS_LABELS[s] }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="flex gap-2">
+    <button class="bg-slate-800 text-white rounded px-4 py-1 text-sm hover:bg-slate-700">Filtrar</button>
+    <a href="{{ url_for('funcionarios.listar') }}" class="text-sm text-gray-500 py-1">Limpar</a>
+  </div>
+</form>
+
+<div class="bg-white rounded-lg shadow overflow-hidden">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="text-left text-gray-500 border-b bg-gray-50">
+        <th class="py-2 px-3">Código</th>
+        <th>Nome</th>
+        <th>Empresa</th>
+        <th>Setor</th>
+        <th>Dias disponíveis</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for l in linhas %}
+      <tr class="border-b last:border-0 hover:bg-gray-50">
+        <td class="py-2 px-3 text-gray-500">{{ l.f.codigo }}</td>
+        <td><a href="{{ url_for('funcionarios.detalhe', func_id=l.f.id) }}" class="text-blue-700 hover:underline">{{ l.f.nome }}</a></td>
+        <td>{{ l.f.empresa.nome }}</td>
+        <td class="text-gray-500">{{ l.f.setor.nome if l.f.setor else '—' }}</td>
+        <td>{{ '%g'|format(l.restantes) if l.restantes else '—' }}</td>
+        <td>
+          <span class="px-2 py-0.5 rounded-full text-xs font-medium {{ STATUS_BADGE[l.status] }}">
+            {{ STATUS_LABELS[l.status] }}
+          </span>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6" class="py-6 text-center text-gray-400">Nenhum funcionário encontrado.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="text-sm text-gray-500 mt-3">{{ linhas|length }} funcionário(s).</p>
+{% endblock %}

@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% block title %}{{ f.nome }} · Controle de Férias{% endblock %}
+{% block content %}
+<a href="{{ url_for('funcionarios.listar') }}" class="text-sm text-blue-700 hover:underline">&larr; Voltar</a>
+
+<div class="bg-white rounded-lg shadow p-5 mt-3 mb-5">
+  <div class="flex items-start justify-between">
+    <div>
+      <h1 class="text-2xl font-bold">{{ f.nome }}</h1>
+      <p class="text-sm text-gray-500">
+        Código {{ f.codigo }} · {{ f.empresa.nome }}
+        · Admissão: {{ f.data_admissao.strftime('%d/%m/%Y') if f.data_admissao else '—' }}
+      </p>
+    </div>
+    <span class="px-3 py-1 rounded-full text-sm font-medium {{ STATUS_BADGE[agregado] }}">
+      {{ STATUS_LABELS[agregado] }}
+    </span>
+  </div>
+
+  <div class="mt-4 p-3 rounded {{ 'bg-green-50 text-green-800' if tem_direito else 'bg-gray-50 text-gray-600' }}">
+    {% if tem_direito %}
+      ✅ <strong>Já tem direito a férias</strong> — existe período adquirido com saldo disponível.
+    {% else %}
+      ⏳ <strong>Ainda não tem direito a férias</strong> (período aquisitivo em formação ou já gozado).
+    {% endif %}
+  </div>
+
+  <form action="{{ url_for('funcionarios.definir_setor', func_id=f.id) }}" method="post" class="mt-4 flex items-center gap-2">
+    <label class="text-sm text-gray-500">Setor:</label>
+    <select name="setor_id" class="border rounded px-2 py-1 text-sm">
+      <option value="">Não definido</option>
+      {% for s in setores %}
+        <option value="{{ s.id }}" {{ 'selected' if f.setor_id == s.id }}>{{ s.nome }}</option>
+      {% endfor %}
+    </select>
+    <button class="text-sm bg-slate-700 text-white rounded px-3 py-1 hover:bg-slate-600">Salvar</button>
+    {% if tem_direito %}
+      <a href="{{ url_for('programacao.programar', func_id=f.id) }}"
+         class="ml-auto bg-amber-500 text-white rounded px-4 py-1 text-sm hover:bg-amber-600">
+        Programar férias
+      </a>
+    {% endif %}
+  </form>
+</div>
+
+<h2 class="font-semibold mb-2">Períodos aquisitivos</h2>
+<div class="bg-white rounded-lg shadow overflow-hidden mb-6">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="text-left text-gray-500 border-b bg-gray-50">
+        <th class="py-2 px-3">Início</th><th>Fim</th><th>Direito</th>
+        <th>Restantes</th><th>Limite p/ gozo</th><th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for p, s in periodos %}
+      <tr class="border-b last:border-0">
+        <td class="py-2 px-3">{{ p.inicio.strftime('%d/%m/%Y') }}</td>
+        <td>{{ p.fim.strftime('%d/%m/%Y') if p.fim else '—' }}</td>
+        <td>{{ '%g'|format(p.dias_direito) if p.dias_direito is not none else '—' }}</td>
+        <td>{{ '%g'|format(p.dias_restantes) if p.dias_restantes is not none else '—' }}</td>
+        <td>{{ p.limite_gozo.strftime('%d/%m/%Y') if p.limite_gozo else '—' }}</td>
+        <td><span class="px-2 py-0.5 rounded-full text-xs font-medium {{ STATUS_BADGE[s] }}">{{ STATUS_LABELS[s] }}</span></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<h2 class="font-semibold mb-2">Programações de férias</h2>
+<div class="bg-white rounded-lg shadow overflow-hidden">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="text-left text-gray-500 border-b bg-gray-50">
+        <th class="py-2 px-3">Início</th><th>Fim</th><th>Dias</th><th>Origem</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for prog in f.programacoes %}
+      <tr class="border-b last:border-0">
+        <td class="py-2 px-3">{{ prog.data_inicio.strftime('%d/%m/%Y') }}</td>
+        <td>{{ prog.data_fim.strftime('%d/%m/%Y') if prog.data_fim else '—' }}</td>
+        <td>{{ prog.dias_gozo }}</td>
+        <td class="text-gray-500">{{ prog.origem }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="4" class="py-4 text-center text-gray-400">Nenhuma programação.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

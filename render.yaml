@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: controle-ferias
+    runtime: python
+    plan: starter            # o plano free do Postgres expira em 90 dias
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "flask db upgrade && gunicorn 'app:create_app()' --bind 0.0.0.0:$PORT"
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      - key: TZ
+        value: "America/Sao_Paulo"   # "hoje" no fuso de Brasília
+      - key: FLASK_APP
+        value: "app:create_app"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: controle-ferias-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: APP_PASSWORD
+        sync: false           # definir manualmente no painel da Render
+      - key: ALERTA_A_VENCER_DIAS
+        value: "60"
+
+databases:
+  - name: controle-ferias-db
+    plan: starter
+    databaseName: controle_ferias
+    user: controle_ferias
