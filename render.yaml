@@ -2,7 +2,7 @@ services:
   - type: web
     name: controle-ferias
     runtime: python
-    plan: starter            # o plano free do Postgres expira em 90 dias
+    plan: free               # web service no free tier (suspende após inatividade)
     buildCommand: "pip install -r requirements.txt"
     startCommand: "flask db upgrade && gunicorn 'app:create_app()' --bind 0.0.0.0:$PORT"
     envVars:
