@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block title %}Alterar senha · {{ gestor.nome }}{% endblock %}
+{% block content %}
+<a href="{{ url_for('gestores.listar') }}" class="text-sm text-blue-700 hover:underline">&larr; Voltar</a>
+
+<div class="bg-white rounded-lg shadow p-5 mt-3 max-w-lg">
+  <h1 class="text-xl font-semibold mb-1">Alterar senha</h1>
+  <p class="text-sm text-gray-500 mb-4">{{ gestor.nome }} &lt;{{ gestor.email }}&gt;</p>
+
+  <form method="post">
+    {{ form.hidden_tag() }}
+
+    <label class="block text-sm font-medium mb-1">Nova senha</label>
+    {{ form.senha(class_="w-full border rounded px-3 py-2 mb-3", autofocus=true) }}
+    {% for e in form.senha.errors %}<p class="text-xs text-red-700 -mt-2 mb-2">{{ e }}</p>{% endfor %}
+
+    <label class="block text-sm font-medium mb-1">Confirmar senha</label>
+    {{ form.confirmar(class_="w-full border rounded px-3 py-2 mb-4") }}
+    {% for e in form.confirmar.errors %}<p class="text-xs text-red-700 -mt-2 mb-2">{{ e }}</p>{% endfor %}
+
+    {{ form.submit(class_="w-full bg-slate-800 text-white rounded py-2 hover:bg-slate-700 cursor-pointer") }}
+  </form>
+</div>
+{% endblock %}

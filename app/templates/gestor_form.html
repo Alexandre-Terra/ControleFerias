@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Novo gestor' if modo == 'novo' else 'Editar gestor' }} · Controle de Férias{% endblock %}
+{% block content %}
+<a href="{{ url_for('gestores.listar') }}" class="text-sm text-blue-700 hover:underline">&larr; Voltar</a>
+
+<div class="bg-white rounded-lg shadow p-5 mt-3 max-w-lg">
+  <h1 class="text-xl font-semibold mb-4">
+    {{ 'Novo gestor' if modo == 'novo' else 'Editar gestor' }}
+  </h1>
+
+  <form method="post">
+    {{ form.hidden_tag() }}
+
+    <label class="block text-sm font-medium mb-1">Nome</label>
+    {{ form.nome(class_="w-full border rounded px-3 py-2 mb-3", autofocus=true) }}
+    {% for e in form.nome.errors %}<p class="text-xs text-red-700 -mt-2 mb-2">{{ e }}</p>{% endfor %}
+
+    <label class="block text-sm font-medium mb-1">Email</label>
+    {{ form.email(class_="w-full border rounded px-3 py-2 mb-3", type="email") }}
+    {% for e in form.email.errors %}<p class="text-xs text-red-700 -mt-2 mb-2">{{ e }}</p>{% endfor %}
+
+    <label class="block text-sm font-medium mb-1">Senha</label>
+    {{ form.senha(class_="w-full border rounded px-3 py-2 mb-1") }}
+    <p class="text-xs text-gray-500 mb-3">Mínimo 6 caracteres.</p>
+    {% for e in form.senha.errors %}<p class="text-xs text-red-700 -mt-2 mb-2">{{ e }}</p>{% endfor %}
+
+    <label class="inline-flex items-center gap-2 mb-4">
+      {{ form.is_admin(class_="rounded") }}
+      <span class="text-sm">Administrador (pode gerenciar gestores)</span>
+    </label>
+
+    {{ form.submit(class_="w-full bg-slate-800 text-white rounded py-2 hover:bg-slate-700 cursor-pointer") }}
+  </form>
+</div>
+{% endblock %}

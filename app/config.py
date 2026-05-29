@@ -20,8 +20,5 @@ class Config:
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-    # Senha única de acesso (login compartilhado).
-    APP_PASSWORD = os.environ.get("APP_PASSWORD", "ferias2026")
-
     # Dias antes do limite de gozo (AH) em que o período entra em "A vencer".
     ALERTA_A_VENCER_DIAS = int(os.environ.get("ALERTA_A_VENCER_DIAS", "60"))

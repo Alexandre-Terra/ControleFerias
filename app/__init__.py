@@ -3,11 +3,13 @@ from datetime import date
 
 from flask import Flask
 from flask_migrate import Migrate
+from flask_wtf.csrf import CSRFProtect
 
 from .config import Config
 from .models import db
 
 migrate = Migrate()
+csrf = CSRFProtect()
 
 
 def create_app(config_class=Config):
@@ -16,15 +18,21 @@ def create_app(config_class=Config):
 
     db.init_app(app)
     migrate.init_app(app, db)
+    csrf.init_app(app)
 
     from . import auth, cli
-    from .routes import dashboard, funcionarios, programacao
+    from .routes import dashboard, funcionarios, gestores, programacao
 
     app.register_blueprint(auth.bp)
     app.register_blueprint(cli.bp)
     app.register_blueprint(dashboard.bp)
     app.register_blueprint(funcionarios.bp)
+    app.register_blueprint(gestores.bp)
     app.register_blueprint(programacao.bp)
+
+    # Rotas POST sem Flask-WTF (ferramenta interna, documentado no README/CLAUDE).
+    csrf.exempt(app.view_functions["auth.logout"])
+    csrf.exempt(app.view_functions["funcionarios.definir_setor"])
 
     from . import status as status_mod
 
@@ -34,6 +42,7 @@ def create_app(config_class=Config):
             "STATUS_LABELS": status_mod.LABELS,
             "STATUS_BADGE": status_mod.BADGE,
             "hoje": date.today(),
+            "current_user": auth.current_user(),
         }
 
     return app

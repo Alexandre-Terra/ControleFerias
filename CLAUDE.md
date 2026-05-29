@@ -24,13 +24,16 @@ Dados originais vêm da planilha `Controle_Ferias_Master_Geral.xlsx` (3 empresas
 py -3.12 -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements-dev.txt
-copy .env.example .env          # ajusta APP_PASSWORD / SECRET_KEY
+copy .env.example .env          # ajusta SECRET_KEY
 
 # banco
 flask db upgrade                       # aplica migrations
 flask db migrate -m "mensagem"         # gera nova migration após mudar models.py
 flask import-xlsx .\Controle_Ferias_Master_Geral.xlsx
 flask seed-setores
+
+# primeiro admin (uma vez por ambiente — não tem fallback de senha única)
+flask criar-gestor --email admin@exemplo.com --nome "Admin" --admin
 
 # rodar
 flask run                              # http://localhost:5000
@@ -43,19 +46,19 @@ pytest -q
 
 ```
 app/
-  __init__.py     factory; registra blueprints; injeta STATUS_LABELS/BADGE/hoje no Jinja
+  __init__.py     factory; registra blueprints; injeta STATUS_LABELS/BADGE/hoje/current_user no Jinja
   config.py       env vars; normaliza DATABASE_URL do provedor (Railway/Render) para postgresql+psycopg://
-  models.py       Empresa, Setor, Funcionario, PeriodoAquisitivo, ProgramacaoFerias
+  models.py       Gestor, Empresa, Setor, Funcionario, PeriodoAquisitivo, ProgramacaoFerias
   status.py       lógica de status (funções puras, sem DB) — derivada de hoje
   importer.py     parsing do XLSX (multi-linha por funcionário, serial→data, decimais)
-  cli.py          comandos Flask: import-xlsx, seed-setores
-  auth.py         login por senha única (APP_PASSWORD)
-  forms.py        Flask-WTF
-  routes/         dashboard, funcionarios, programacao
+  cli.py          comandos Flask: import-xlsx, seed-setores, criar-gestor
+  auth.py         login por email/senha (Gestor); helpers current_user, login_required, admin_required
+  forms.py        Flask-WTF (Login, Programação, Gestor, MudarSenha)
+  routes/         dashboard, funcionarios, gestores, programacao
   templates/      Jinja2 + Tailwind (CDN)
 migrations/       Alembic — DEVE ser commitada
 seeds/setores.py  setores padrão
-tests/            test_status.py, test_importer.py, test_programacao.py, conftest.py
+tests/            test_status.py, test_importer.py, test_programacao.py, test_auth.py, test_gestores.py, conftest.py
 ```
 
 ## Regras de domínio (CLT) — ler antes de mexer em status/programação
@@ -79,23 +82,29 @@ Precedência (pior caso primeiro): `VENCIDA > A_VENCER > TEM_DIREITO > PROGRAMAD
 - O importer mapeia colunas do XLSX por letra (Q, R, AC, AG, AH, Z, AB, W, X). Se mudar o layout da planilha, atualizar `importer.py` e `test_importer.py` juntos.
 - `flask db migrate` após qualquer alteração em `models.py`; commitar o arquivo gerado em `migrations/versions/`.
 - Tailwind via CDN — não introduzir build de front-end sem necessidade real.
-- CSRF: `Flask-WTF` é usado nos formulários; rotas POST sem form (`/logout`, `/funcionarios/<id>/setor`) propositalmente não validam CSRF (ferramenta interna). Documentado no README.
+- CSRF: `Flask-WTF` é usado nos formulários; rotas POST sem form (`/logout`, `/funcionarios/<id>/setor`) propositalmente não validam CSRF (ferramenta interna). Rotas admin de `/gestores/*` usam Flask-WTF e validam CSRF.
+- Autenticação: `current_user()` em `auth.py` é a fonte da verdade. Não inspecionar `session["user_id"]` direto fora de `auth.py`. `login_required`/`admin_required` re-buscam o gestor a cada request — desativar um gestor surte efeito imediato.
 
 ## Deploy (Railway)
 
 - `railway.toml` define builder Railpack e `startCommand` (`flask db upgrade && gunicorn ...`).
 - `Procfile` espelha o `startCommand` para compatibilidade com qualquer detecção alternativa.
 - Postgres é um **plugin separado** no mesmo projeto Railway — vincular via `DATABASE_URL=${{ Postgres.DATABASE_URL }}` no painel de Variables do serviço web.
-- Variáveis a configurar manualmente no painel: `DATABASE_URL`, `SECRET_KEY`, `APP_PASSWORD`, `FLASK_APP=app:create_app`, `TZ=America/Sao_Paulo`, `ALERTA_A_VENCER_DIAS` (opcional).
+- Variáveis a configurar manualmente no painel: `DATABASE_URL`, `SECRET_KEY`, `FLASK_APP=app:create_app`, `TZ=America/Sao_Paulo`, `ALERTA_A_VENCER_DIAS` (opcional).
 - Domínio público: **Settings → Networking → Generate Domain**.
 - `flask db upgrade` roda a cada deploy (parte do `startCommand`).
-- Import inicial via Railway CLI: `railway run flask import-xlsx ./Controle_Ferias_Master_Geral.xlsx`.
+- Import inicial via Railway CLI (planilha fica local — está no `.gitignore`):
+  - dry-run: `railway run flask import-xlsx ./Controle_Ferias_Master_Geral.xlsx --dry-run`
+  - real: `railway run flask import-xlsx ./Controle_Ferias_Master_Geral.xlsx`
+- Primeiro admin (uma única vez — **não** colocar no `startCommand`, isso recriaria/sobrescreveria a cada deploy):
+  - `railway run flask criar-gestor --email admin@exemplo.com --nome "Admin" --admin`
+  - Sem este passo a instância fica trancada (não existe mais fallback por `APP_PASSWORD`).
 - `DATABASE_URL` do Railway começa com `postgresql://` — `config.py` normaliza para `postgresql+psycopg://`.
 
 ## Limitações conhecidas (não "corrigir" sem pedir)
 
 - **Setor por funcionário** não vem da planilha — começa "Não definido", atribuído via edição inline.
-- **Login** é senha única compartilhada. Há gancho em `auth.py` para evoluir.
+- **Login** é por gestor identificado (email/senha). Sem reset por email, sem self-service para o gestor mudar a própria senha (apenas admin reseta via `/gestores/<id>/senha`). Sem filtro por empresa — todos os gestores logados veem todas as empresas.
 - **Abono, 13º, faltas** estão fora de escopo nesta versão — valores importados são exibidos mas não editáveis.
 
 ## Ao trabalhar aqui

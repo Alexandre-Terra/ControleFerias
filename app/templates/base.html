@@ -7,15 +7,21 @@
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-50 text-gray-800">
-  {% if session.get('auth') %}
+  {% if current_user %}
   <nav class="bg-slate-800 text-white">
     <div class="max-w-6xl mx-auto px-4 py-3 flex items-center gap-6">
       <a href="{{ url_for('dashboard.index') }}" class="font-semibold text-lg">🏖️ Controle de Férias</a>
       <a href="{{ url_for('dashboard.index') }}" class="hover:text-amber-300">Dashboard</a>
       <a href="{{ url_for('funcionarios.listar') }}" class="hover:text-amber-300">Funcionários</a>
-      <form action="{{ url_for('auth.logout') }}" method="post" class="ml-auto">
-        <button class="text-sm text-slate-300 hover:text-white">Sair</button>
-      </form>
+      {% if current_user.is_admin %}
+      <a href="{{ url_for('gestores.listar') }}" class="hover:text-amber-300">Gestores</a>
+      {% endif %}
+      <div class="ml-auto flex items-center gap-3">
+        <span class="text-sm text-slate-300">Olá, <strong class="text-white">{{ current_user.nome }}</strong></span>
+        <form action="{{ url_for('auth.logout') }}" method="post">
+          <button class="text-sm text-slate-300 hover:text-white">Sair</button>
+        </form>
+      </div>
     </div>
   </nav>
   {% endif %}

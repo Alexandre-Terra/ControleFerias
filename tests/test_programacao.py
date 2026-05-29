@@ -1,7 +1,13 @@
 """Testes da programação de férias: consumo de saldo e validações."""
 from datetime import date, timedelta
 
-from app.models import Empresa, Funcionario, PeriodoAquisitivo, db
+from app.models import (
+    Empresa,
+    Funcionario,
+    PeriodoAquisitivo,
+    ProgramacaoFerias,
+    db,
+)
 
 
 def _setup_funcionario(saldo=16):
@@ -25,17 +31,11 @@ def _setup_funcionario(saldo=16):
     return f, p
 
 
-def _login(client):
-    client.post("/login", data={"senha": "ferias2026"})
-
-
-def test_programar_consome_saldo(app):
+def test_programar_consome_saldo(app, client_gestor, gestor_comum):
     f, p = _setup_funcionario(saldo=16)
-    client = app.test_client()
-    _login(client)
     inicio = (date.today() + timedelta(days=45)).isoformat()
 
-    r = client.post(
+    r = client_gestor.post(
         f"/funcionarios/{f.id}/programar",
         data={"periodo_id": p.id, "data_inicio": inicio, "dias_gozo": 10},
         follow_redirects=True,
@@ -45,14 +45,15 @@ def test_programar_consome_saldo(app):
     p_atual = db.session.get(PeriodoAquisitivo, p.id)
     assert p_atual.dias_restantes == 6  # 16 - 10
 
+    prog = ProgramacaoFerias.query.filter_by(funcionario_id=f.id).first()
+    assert prog.criado_por_id == gestor_comum.id
 
-def test_nao_programa_alem_do_saldo(app):
+
+def test_nao_programa_alem_do_saldo(app, client_gestor):
     f, p = _setup_funcionario(saldo=6)
-    client = app.test_client()
-    _login(client)
     inicio = (date.today() + timedelta(days=45)).isoformat()
 
-    r = client.post(
+    r = client_gestor.post(
         f"/funcionarios/{f.id}/programar",
         data={"periodo_id": p.id, "data_inicio": inicio, "dias_gozo": 10},
         follow_redirects=True,
@@ -61,13 +62,11 @@ def test_nao_programa_alem_do_saldo(app):
     assert db.session.get(PeriodoAquisitivo, p.id).dias_restantes == 6  # inalterado
 
 
-def test_aviso_previo_30_dias(app):
+def test_aviso_previo_30_dias(app, client_gestor):
     f, p = _setup_funcionario(saldo=16)
-    client = app.test_client()
-    _login(client)
     cedo = (date.today() + timedelta(days=5)).isoformat()
 
-    r = client.post(
+    r = client_gestor.post(
         f"/funcionarios/{f.id}/programar",
         data={"periodo_id": p.id, "data_inicio": cedo, "dias_gozo": 5},
         follow_redirects=True,

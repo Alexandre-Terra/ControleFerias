@@ -10,7 +10,7 @@ from flask import (
     url_for,
 )
 
-from ..auth import login_required
+from ..auth import current_user, login_required
 from ..forms import ProgramacaoForm
 from ..models import Funcionario, PeriodoAquisitivo, ProgramacaoFerias, db
 from .. import status as st
@@ -83,6 +83,7 @@ def programar(func_id):
                     dias_gozo=dias,
                     data_fim=form.data_inicio.data + timedelta(days=dias - 1),
                     origem="manual",
+                    criado_por_id=current_user().id,
                 )
             )
             # Consome o saldo do período para evitar dupla programação.

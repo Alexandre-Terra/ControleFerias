@@ -5,8 +5,10 @@
   <p class="text-sm text-gray-500 mb-5">Acesso dos gestores</p>
   <form method="post">
     {{ form.hidden_tag() }}
+    <label class="block text-sm font-medium mb-1">Email</label>
+    {{ form.email(class_="w-full border rounded px-3 py-2 mb-3", autofocus=true, type="email") }}
     <label class="block text-sm font-medium mb-1">Senha</label>
-    {{ form.senha(class_="w-full border rounded px-3 py-2 mb-4", autofocus=true) }}
+    {{ form.senha(class_="w-full border rounded px-3 py-2 mb-4") }}
     {{ form.submit(class_="w-full bg-slate-800 text-white rounded py-2 hover:bg-slate-700 cursor-pointer") }}
   </form>
 </div>

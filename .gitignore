@@ -9,3 +9,4 @@ instance/
 *.log
 server.log
 *.xlsx
+render.yaml

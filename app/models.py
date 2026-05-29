@@ -14,6 +14,18 @@ def _agora():
     return datetime.now(timezone.utc)
 
 
+class Gestor(db.Model):
+    __tablename__ = "gestor"
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(120), nullable=False)
+    email = db.Column(db.String(160), unique=True, nullable=False)
+    senha_hash = db.Column(db.String(255), nullable=False)
+    is_admin = db.Column(db.Boolean, nullable=False, default=False)
+    ativo = db.Column(db.Boolean, nullable=False, default=True)
+    criado_em = db.Column(db.DateTime, default=_agora)
+
+
 class Empresa(db.Model):
     __tablename__ = "empresa"
 
@@ -109,6 +121,10 @@ class ProgramacaoFerias(db.Model):
     data_fim = db.Column(db.Date, nullable=True)         # derivado
     origem = db.Column(db.String(10), nullable=False, default="manual")  # import|manual
     criado_em = db.Column(db.DateTime, default=_agora)
+    criado_por_id = db.Column(
+        db.Integer, db.ForeignKey("gestor.id"), nullable=True
+    )
 
     funcionario = db.relationship("Funcionario", back_populates="programacoes")
     periodo = db.relationship("PeriodoAquisitivo")
+    criado_por = db.relationship("Gestor")
