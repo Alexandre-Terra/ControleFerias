@@ -1,4 +1,4 @@
-"""Testes do importador: conversões, parsing multi-linha e idempotência."""
+"""Testes do importador: conversões, parsing multi-linha, idempotência e dry-run."""
 from datetime import date
 
 from openpyxl import Workbook
@@ -65,14 +65,14 @@ def _planilha(tmp_path):
 
 def test_import_multilinha_e_conversoes(app, tmp_path):
     caminho = _planilha(tmp_path)
-    stats = importar_xlsx(str(caminho))
+    rel = importar_xlsx(str(caminho))
 
-    assert stats == {
-        "empresas": 1,
-        "funcionarios": 1,
-        "periodos": 2,
-        "programacoes": 1,
-    }
+    assert rel["empresas"]["novos"] == 1
+    assert rel["funcionarios"]["novos"] == 1
+    assert rel["periodos"]["novos"] == 2
+    assert rel["programacoes"]["novos"] == 1
+    assert rel["dry_run"] is False
+    assert rel["avisos"] == []
 
     f = Funcionario.query.filter_by(codigo="3").one()
     assert f.nome == "DOUGLAS SOUSA DA SILVA"
@@ -91,13 +91,60 @@ def test_import_multilinha_e_conversoes(app, tmp_path):
 def test_import_idempotente(app, tmp_path):
     caminho = _planilha(tmp_path)
     importar_xlsx(str(caminho))
-    stats2 = importar_xlsx(str(caminho))  # segunda vez não cria nada
+    rel = importar_xlsx(str(caminho))  # segunda vez não cria/atualiza nada
 
-    assert stats2 == {
-        "empresas": 0,
-        "funcionarios": 0,
-        "periodos": 0,
-        "programacoes": 0,
-    }
+    for ent, esperado_inalterado in [
+        ("empresas", 1),
+        ("funcionarios", 1),
+        ("periodos", 2),
+        ("programacoes", 1),
+    ]:
+        assert rel[ent]["novos"] == 0, ent
+        assert rel[ent]["atualizados"] == 0, ent
+        assert rel[ent]["inalterados"] == esperado_inalterado, ent
+
     assert Funcionario.query.count() == 1
     assert PeriodoAquisitivo.query.count() == 2
+
+
+def test_dry_run_nao_persiste(app, tmp_path):
+    caminho = _planilha(tmp_path)
+    rel = importar_xlsx(str(caminho), dry_run=True)
+
+    assert rel["dry_run"] is True
+    assert rel["funcionarios"]["novos"] == 1
+    assert rel["periodos"]["novos"] == 2
+
+    # Nada foi gravado — rollback descartou tudo.
+    assert Funcionario.query.count() == 0
+    assert PeriodoAquisitivo.query.count() == 0
+    assert ProgramacaoFerias.query.count() == 0
+
+
+def test_avisos_de_divergencia(app, tmp_path):
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Auto Mec"
+
+    def put(row, key, value):
+        ws.cell(row=row, column=COL[key], value=value)
+
+    # Linha 8: dias_restantes > dias_direito + gozo após limite_gozo.
+    put(8, "codigo", 7)
+    put(8, "nome", "FULANO DA SILVA")
+    put(8, "q_inicio", serial(date(2023, 1, 1)))
+    put(8, "r_fim", serial(date(2023, 12, 31)))
+    put(8, "ac_direito", 30)
+    put(8, "ag_restante", 40)            # > dias_direito → aviso
+    put(8, "ah_limite", serial(date(2024, 12, 30)))
+    put(8, "w_gozo", serial(date(2025, 6, 1)))  # depois do limite → aviso
+    put(8, "x_dias", 10)
+
+    caminho = tmp_path / "div.xlsx"
+    wb.save(caminho)
+
+    rel = importar_xlsx(str(caminho), dry_run=True)
+
+    assert len(rel["avisos"]) == 2
+    assert any("dias_restantes" in a for a in rel["avisos"])
+    assert any("após o limite" in a for a in rel["avisos"])
