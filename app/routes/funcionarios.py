@@ -3,6 +3,7 @@ from datetime import date
 
 from flask import (
     Blueprint,
+    abort,
     current_app,
     flash,
     redirect,
@@ -12,7 +13,7 @@ from flask import (
 )
 from sqlalchemy.orm import joinedload
 
-from ..auth import login_required
+from ..auth import admin_required, current_user, filtrar_por_escopo, login_required
 from ..models import Empresa, Funcionario, Setor, db
 from .. import dashviz
 from .. import status as st
@@ -35,18 +36,17 @@ def listar():
     status_filtro = request.args.get("status") or ""
     busca = (request.args.get("busca") or "").strip()
 
-    # Carrega tudo e calcula o status uma vez — os chips mostram contagens
-    # globais (independentes dos filtros ativos), como no painel.
-    funcionarios = (
+    # Carrega tudo (dentro do escopo do gestor) e calcula o status uma vez —
+    # os chips mostram contagens do conjunto escopado.
+    funcionarios = filtrar_por_escopo(
         Funcionario.query.options(
             joinedload(Funcionario.periodos),
             joinedload(Funcionario.programacoes),
             joinedload(Funcionario.empresa),
             joinedload(Funcionario.setor),
-        )
-        .order_by(Funcionario.nome)
-        .all()
-    )
+        ).order_by(Funcionario.nome),
+        current_user(),
+    ).all()
 
     todas = []
     chip_counts = {s: 0 for s in st.PRECEDENCIA}
@@ -111,6 +111,8 @@ def detalhe(func_id):
     hoje = date.today()
     dav = current_app.config["ALERTA_A_VENCER_DIAS"]
     f = db.get_or_404(Funcionario, func_id)
+    if not current_user().pode_gerir(f):
+        abort(403)
 
     periodos = st.periodos_com_status(f, hoje, dav)
     return render_template(
@@ -124,7 +126,7 @@ def detalhe(func_id):
 
 
 @bp.route("/<int:func_id>/setor", methods=["POST"])
-@login_required
+@admin_required
 def definir_setor(func_id):
     f = db.get_or_404(Funcionario, func_id)
     setor_id = request.form.get("setor_id", type=int)

@@ -3,6 +3,7 @@ from datetime import date, timedelta
 
 from flask import (
     Blueprint,
+    abort,
     current_app,
     flash,
     redirect,
@@ -35,6 +36,8 @@ def programar(func_id):
     hoje = date.today()
     dav = current_app.config["ALERTA_A_VENCER_DIAS"]
     f = db.get_or_404(Funcionario, func_id)
+    if not current_user().pode_gerir(f):
+        abort(403)
 
     elegiveis = _periodos_elegiveis(f, hoje)
     form = ProgramacaoForm()

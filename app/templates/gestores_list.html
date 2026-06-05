@@ -15,16 +15,18 @@
   </div>
 
   <div class="reveal r2 panel" style="overflow:hidden">
-    <div style="display:grid;grid-template-columns:minmax(0,1.6fr) 1.6fr .8fr .8fr auto;gap:14px;padding:13px 20px;background:var(--surface-2);border-bottom:1px solid var(--line)">
-      {% for h in ['Nome', 'Email', 'Papel', 'Status', ''] %}<div class="eyebrow" style="font-size:10.5px">{{ h }}</div>{% endfor %}
+    <div style="display:grid;grid-template-columns:minmax(0,1.6fr) 1.6fr .9fr .8fr .8fr auto;gap:14px;padding:13px 20px;background:var(--surface-2);border-bottom:1px solid var(--line)">
+      {% for h in ['Nome', 'Email', 'Setor', 'Papel', 'Status', ''] %}<div class="eyebrow" style="font-size:10.5px">{{ h }}</div>{% endfor %}
     </div>
     {% for g in gestores %}
-    <div style="display:grid;grid-template-columns:minmax(0,1.6fr) 1.6fr .8fr .8fr auto;gap:14px;padding:13px 20px;align-items:center;{{ 'border-top:1px solid var(--line)' if not loop.first }}">
+    <div style="display:grid;grid-template-columns:minmax(0,1.6fr) 1.6fr .9fr .8fr .8fr auto;gap:14px;padding:13px 20px;align-items:center;{{ 'border-top:1px solid var(--line)' if not loop.first }}">
       <div style="display:flex;align-items:center;gap:11px;min-width:0">{{ m.avatar(g.nome, 32) }}<span style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ g.nome }}</span></div>
       <div class="mono" style="font-size:12.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ g.email }}</div>
+      <div style="font-size:13px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ g.setor.nome if g.setor else '—' }}</div>
       <div><span class="pill" style="--c: {{ '#7C5CD6' if g.is_admin else 'var(--idle)' }}"><span class="dot"></span>{{ 'admin' if g.is_admin else 'gestor' }}</span></div>
       <div><span class="pill {{ 's-ok' if g.ativo else 's-risk' }}"><span class="dot"></span>{{ 'ativo' if g.ativo else 'inativo' }}</span></div>
       <div style="display:flex;gap:14px;justify-content:flex-end;align-items:center">
+        <a href="{{ url_for('gestores.editar', gestor_id=g.id) }}" style="color:var(--ink-2);font-size:13px;font-weight:600">Editar</a>
         <a href="{{ url_for('gestores.mudar_senha', gestor_id=g.id) }}" style="color:var(--info);font-size:13px;font-weight:600">Senha</a>
         {% if g.ativo %}
         <form action="{{ url_for('gestores.desativar', gestor_id=g.id) }}" method="post" style="display:inline-flex;margin:0">

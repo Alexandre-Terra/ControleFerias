@@ -8,13 +8,14 @@ def test_listar_so_para_admin(client_admin):
     assert "Admin Teste" in r.get_data(as_text=True)
 
 
-def test_criar_gestor(client_admin):
+def test_criar_gestor(client_admin, setor):
     r = client_admin.post(
         "/gestores/novo",
         data={
             "nome": "Novo Gestor",
             "email": "novo@teste.com",
             "senha": "senha123",
+            "setor_id": setor.id,
             # is_admin omitido → False
         },
         follow_redirects=True,
@@ -23,16 +24,74 @@ def test_criar_gestor(client_admin):
     g = Gestor.query.filter_by(email="novo@teste.com").first()
     assert g is not None
     assert g.is_admin is False
+    assert g.setor_id == setor.id
     assert g.ativo is True
+
+
+def test_criar_gestor_admin_dispensa_setor(client_admin):
+    r = client_admin.post(
+        "/gestores/novo",
+        data={
+            "nome": "Outro Admin",
+            "email": "admin2@teste.com",
+            "senha": "senha123",
+            "setor_id": 0,
+            "is_admin": "y",
+        },
+        follow_redirects=True,
+    )
+    assert "criado" in r.get_data(as_text=True)
+    g = Gestor.query.filter_by(email="admin2@teste.com").first()
+    assert g is not None and g.is_admin is True and g.setor_id is None
+
+
+def test_criar_gestor_nao_admin_sem_setor_falha(client_admin):
+    r = client_admin.post(
+        "/gestores/novo",
+        data={
+            "nome": "Sem Setor",
+            "email": "semsetor@teste.com",
+            "senha": "senha123",
+            "setor_id": 0,
+        },
+        follow_redirects=True,
+    )
+    assert "precisa de um setor" in r.get_data(as_text=True)
+    assert Gestor.query.filter_by(email="semsetor@teste.com").first() is None
 
 
 def test_criar_gestor_email_duplicado(client_admin, gestor_admin):
     r = client_admin.post(
         "/gestores/novo",
-        data={"nome": "Outro", "email": gestor_admin.email, "senha": "senha123"},
+        data={
+            "nome": "Outro",
+            "email": gestor_admin.email,
+            "senha": "senha123",
+            "setor_id": 0,
+        },
         follow_redirects=True,
     )
     assert "Já existe" in r.get_data(as_text=True)
+
+
+def test_editar_gestor_muda_setor(client_admin, gestor_comum):
+    from app.models import Setor
+
+    outro = Setor(nome="Administrativo")
+    db.session.add(outro)
+    db.session.commit()
+    r = client_admin.post(
+        f"/gestores/{gestor_comum.id}/editar",
+        data={
+            "nome": gestor_comum.nome,
+            "email": gestor_comum.email,
+            "senha": "",  # mantém
+            "setor_id": outro.id,
+        },
+        follow_redirects=True,
+    )
+    assert "atualizado" in r.get_data(as_text=True)
+    assert db.session.get(Gestor, gestor_comum.id).setor_id == outro.id
 
 
 def test_desativar_gestor(client_admin, gestor_comum):

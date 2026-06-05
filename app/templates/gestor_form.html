@@ -28,8 +28,14 @@
         <div>
           <label class="lbl">Senha</label>
           {{ form.senha(class_="field") }}
-          <p style="color:var(--ink-3);font-size:12px;margin:6px 0 0">Mínimo 6 caracteres.</p>
+          <p style="color:var(--ink-3);font-size:12px;margin:6px 0 0">{{ 'Deixe em branco para manter a senha atual.' if modo == 'editar' else 'Mínimo 6 caracteres.' }}</p>
           {% for e in form.senha.errors %}<p style="color:var(--risk);font-size:12px;margin:6px 0 0">{{ e }}</p>{% endfor %}
+        </div>
+        <div>
+          <label class="lbl">Setor</label>
+          {{ form.setor_id(class_="field") }}
+          <p style="color:var(--ink-3);font-size:12px;margin:6px 0 0">Obrigatório para gestores não-admin — define quais funcionários ele gere. Admin vê todos.</p>
+          {% for e in form.setor_id.errors %}<p style="color:var(--risk);font-size:12px;margin:6px 0 0">{{ e }}</p>{% endfor %}
         </div>
         <label style="display:inline-flex;align-items:center;gap:9px;font-size:14px;cursor:pointer">
           {{ form.is_admin() }} <span>Administrador (pode gerenciar gestores)</span>

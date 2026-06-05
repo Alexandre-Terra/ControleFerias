@@ -47,6 +47,9 @@ class GestorForm(FlaskForm):
     nome = StringField("Nome", validators=[DataRequired(), Length(max=120)])
     email = StringField("Email", validators=[DataRequired(), Email(), Length(max=160)])
     senha = PasswordField("Senha", validators=[Optional(), Length(min=6)])
+    # 0 = "— Nenhum"; choices preenchidas na rota. Não-admin exige setor
+    # (validado na rota, junto das demais checagens de email/senha).
+    setor_id = SelectField("Setor", coerce=int, validators=[Optional()])
     is_admin = BooleanField("Administrador")
     submit = SubmitField("Salvar")
 

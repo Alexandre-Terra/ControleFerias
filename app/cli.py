@@ -6,7 +6,7 @@ from flask import Blueprint, current_app
 from werkzeug.security import generate_password_hash
 
 from .importer import importar_setores, importar_xlsx
-from .models import Gestor, db
+from .models import Gestor, Setor, db
 
 bp = Blueprint("cli", __name__, cli_group=None)
 
@@ -119,11 +119,26 @@ def seed_setores_command():
 @click.option("--nome", required=True, help="Nome do gestor.")
 @click.option("--senha", default=None, help="Senha (se omitida, será solicitada).")
 @click.option("--admin", is_flag=True, help="Cria como administrador.")
-def criar_gestor_command(email, nome, senha, admin):
+@click.option(
+    "--setor",
+    default=None,
+    help="Nome do setor a associar (gestor não-admin só gere o próprio setor).",
+)
+def criar_gestor_command(email, nome, senha, admin, setor):
     """Cria um gestor no banco. Use para o primeiro admin (bootstrap)."""
     email_norm = email.strip().lower()
     if Gestor.query.filter_by(email=email_norm).first():
         raise click.ClickException(f"Já existe um gestor com o email {email_norm}.")
+
+    setor_obj = None
+    if setor:
+        setor_obj = Setor.query.filter_by(nome=setor.strip()).first()
+        if setor_obj is None:
+            raise click.ClickException(f"Setor '{setor.strip()}' não encontrado.")
+    elif not admin:
+        raise click.ClickException(
+            "Gestor não-admin precisa de --setor (ou use --admin)."
+        )
 
     if not senha:
         senha = click.prompt(
@@ -137,11 +152,12 @@ def criar_gestor_command(email, nome, senha, admin):
         email=email_norm,
         senha_hash=generate_password_hash(senha),
         is_admin=admin,
+        setor_id=setor_obj.id if setor_obj else None,
         ativo=True,
     )
     db.session.add(g)
     db.session.commit()
-    papel = "admin" if admin else "gestor"
+    papel = "admin" if admin else f"gestor ({setor_obj.nome})"
     click.echo(f"Criado {papel} {g.nome} <{g.email}> (id={g.id}).")
 
 

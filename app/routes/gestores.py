@@ -10,9 +10,16 @@ from werkzeug.security import generate_password_hash
 
 from ..auth import admin_required, current_user
 from ..forms import GestorForm, MudarSenhaForm
-from ..models import Gestor, db
+from ..models import Gestor, Setor, db
 
 bp = Blueprint("gestores", __name__, url_prefix="/gestores")
+
+
+def _setor_choices():
+    """Opções do select de setor (0 = nenhum; admin não precisa de setor)."""
+    return [(0, "— Nenhum (admin)")] + [
+        (s.id, s.nome) for s in Setor.query.order_by(Setor.nome).all()
+    ]
 
 
 @bp.route("/")
@@ -26,18 +33,23 @@ def listar():
 @admin_required
 def novo():
     form = GestorForm()
+    form.setor_id.choices = _setor_choices()
     if form.validate_on_submit():
         email = form.email.data.strip().lower()
+        setor_id = form.setor_id.data or None
         if Gestor.query.filter_by(email=email).first():
             flash("Já existe um gestor com esse email.", "erro")
         elif not form.senha.data:
             flash("Senha é obrigatória ao criar um novo gestor.", "erro")
+        elif not form.is_admin.data and not setor_id:
+            flash("Gestor não-admin precisa de um setor.", "erro")
         else:
             g = Gestor(
                 nome=form.nome.data.strip(),
                 email=email,
                 senha_hash=generate_password_hash(form.senha.data),
                 is_admin=bool(form.is_admin.data),
+                setor_id=setor_id,
                 ativo=True,
             )
             db.session.add(g)
@@ -45,6 +57,35 @@ def novo():
             flash(f"Gestor {g.nome} criado.", "ok")
             return redirect(url_for("gestores.listar"))
     return render_template("gestor_form.html", form=form, modo="novo")
+
+
+@bp.route("/<int:gestor_id>/editar", methods=["GET", "POST"])
+@admin_required
+def editar(gestor_id):
+    g = db.get_or_404(Gestor, gestor_id)
+    form = GestorForm(obj=g)
+    form.setor_id.choices = _setor_choices()
+    if form.validate_on_submit():
+        email = form.email.data.strip().lower()
+        setor_id = form.setor_id.data or None
+        outro = Gestor.query.filter_by(email=email).first()
+        if outro and outro.id != g.id:
+            flash("Já existe um gestor com esse email.", "erro")
+        elif not form.is_admin.data and not setor_id:
+            flash("Gestor não-admin precisa de um setor.", "erro")
+        else:
+            g.nome = form.nome.data.strip()
+            g.email = email
+            g.is_admin = bool(form.is_admin.data)
+            g.setor_id = setor_id
+            if form.senha.data:
+                g.senha_hash = generate_password_hash(form.senha.data)
+            db.session.commit()
+            flash(f"Gestor {g.nome} atualizado.", "ok")
+            return redirect(url_for("gestores.listar"))
+    elif not form.is_submitted():
+        form.setor_id.data = g.setor_id or 0
+    return render_template("gestor_form.html", form=form, modo="editar")
 
 
 @bp.route("/<int:gestor_id>/desativar", methods=["POST"])

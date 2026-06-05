@@ -4,7 +4,7 @@ from datetime import date
 from flask import Blueprint, current_app, render_template
 from sqlalchemy.orm import joinedload
 
-from ..auth import login_required
+from ..auth import current_user, filtrar_por_escopo, login_required
 from ..models import Funcionario
 from .. import dashviz
 
@@ -17,15 +17,15 @@ def index():
     hoje = date.today()
     dav = current_app.config["ALERTA_A_VENCER_DIAS"]
 
-    funcionarios = (
+    funcionarios = filtrar_por_escopo(
         Funcionario.query.options(
             joinedload(Funcionario.periodos),
             joinedload(Funcionario.programacoes),
             joinedload(Funcionario.empresa),
             joinedload(Funcionario.setor),
-        )
-        .all()
-    )
+        ),
+        current_user(),
+    ).all()
 
     dados = dashviz.dashboard_dados(funcionarios, hoje, dav)
     return render_template("dashboard.html", d=dados)

@@ -68,7 +68,7 @@
 <div style="display:flex;align-items:center;gap:10px">
   <div style="text-align:right;line-height:1.2">
     <div style="font-size:13px;font-weight:600">{{ user.nome }}</div>
-    <div class="mono" style="font-size:10.5px;color:var(--ink-3)">{{ 'ADMIN' if user.is_admin else 'GESTOR' }}</div>
+    <div class="mono" style="font-size:10.5px;color:var(--ink-3)">{{ 'ADMIN' if user.is_admin else ('GESTOR · ' ~ user.setor.nome if user.setor else 'GESTOR') }}</div>
   </div>
   {{ avatar(user.nome, 34) }}
   <form action="{{ url_for('auth.logout') }}" method="post" style="display:inline-flex">

@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from app import create_app  # noqa: E402
 from app.config import Config  # noqa: E402
-from app.models import Gestor, db  # noqa: E402
+from app.models import Gestor, Setor, db  # noqa: E402
 
 
 @pytest.fixture
@@ -41,12 +41,21 @@ def gestor_admin(app):
 
 
 @pytest.fixture
-def gestor_comum(app):
+def setor(app):
+    s = Setor(nome="Produção")
+    db.session.add(s)
+    db.session.commit()
+    return s
+
+
+@pytest.fixture
+def gestor_comum(app, setor):
     g = Gestor(
         nome="Gestor Teste",
         email="gestor@teste.com",
         senha_hash=generate_password_hash("senha123"),
         is_admin=False,
+        setor_id=setor.id,
         ativo=True,
     )
     db.session.add(g)

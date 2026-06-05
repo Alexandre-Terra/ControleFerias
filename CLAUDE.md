@@ -92,6 +92,7 @@ Precedência (pior caso primeiro): `VENCIDA > A_VENCER > TEM_DIREITO > PROGRAMAD
 - Status → apresentação: `STATUS_LABELS`/`STATUS_CLASS` (classe `.s-*`) e `STATUS_VAR` (nome da CSS var de cor), injetados no Jinja. Ícones via macro `icon()` a partir de `ICONS` (`app/icons.py`).
 - CSRF: `Flask-WTF` é usado nos formulários; rotas POST sem form (`/logout`, `/funcionarios/<id>/setor`) propositalmente não validam CSRF (ferramenta interna). Rotas admin de `/gestores/*` usam Flask-WTF e validam CSRF.
 - Autenticação: `current_user()` em `auth.py` é a fonte da verdade. Não inspecionar `session["user_id"]` direto fora de `auth.py`. `login_required`/`admin_required` re-buscam o gestor a cada request — desativar um gestor surte efeito imediato.
+- **Escopo por setor (autorização):** gestor não-admin só vê/gere funcionários do seu setor (`Gestor.setor_id`); admin vê/gere todos. A regra vive em **dois lugares que devem ficar em sincronia**: `Gestor.pode_gerir(funcionario)` (checagem por objeto — usada em guards de rota e nos templates) e `auth.filtrar_por_escopo(query, gestor)` (mesma regra no nível de query — usada em `dashboard.index` e `funcionarios.listar`). Rotas de mutação/detalhe (`funcionarios.detalhe`, `programacao.programar`) fazem `abort(403)` via `pode_gerir`. Reatribuir setor (`funcionarios.definir_setor`) e gerir funcionários "Não definido" é **admin-only**. Setor é global (cross-empresa): gestor de "Produção" gere Produção nas 3 empresas.
 
 ## Deploy (Railway)
 
@@ -115,7 +116,8 @@ Precedência (pior caso primeiro): `VENCIDA > A_VENCER > TEM_DIREITO > PROGRAMAD
 ## Limitações conhecidas (não "corrigir" sem pedir)
 
 - **Setor por funcionário** vem da coluna B das abas de empresa via `flask import-setores` (texto livre mapeado para vocabulário canônico — `SETOR_CANONICO` no importer); também pode ser ajustado por edição inline. Funcionário sem setor na planilha fica "Não definido" (ex.: a aba `AMP Comercio`).
-- **Login** é por gestor identificado (email/senha). Sem reset por email, sem self-service para o gestor mudar a própria senha (apenas admin reseta via `/gestores/<id>/senha`). A senha do admin de `ADMIN_EMAIL` é recuperável trocando `ADMIN_SENHA` e refazendo o deploy (ver Deploy). Sem filtro por empresa — todos os gestores logados veem todas as empresas.
+- **Login** é por gestor identificado (email/senha). Sem reset por email, sem self-service para o gestor mudar a própria senha (apenas admin reseta via `/gestores/<id>/senha`). A senha do admin de `ADMIN_EMAIL` é recuperável trocando `ADMIN_SENHA` e refazendo o deploy (ver Deploy).
+- **Acesso por setor (não por empresa):** o filtro de visão é por **setor**, não por empresa — um gestor não-admin de "Produção" vê Produção em **todas** as empresas. Admin atribui o setor ao gestor no cadastro (`/gestores/novo`) ou em `/gestores/<id>/editar`. **Consequência da migration `a15c6bf0c3a1`:** todo gestor não-admin pré-existente fica com `setor_id = NULL` e **não vê nada** até um admin atribuir um setor — é o efeito esperado de exigir setor para não-admin, não um bug. Gestor não-admin sem setor → listas/painel vazios e 403 nos detalhes.
 - **Abono, 13º, faltas** estão fora de escopo nesta versão — valores importados são exibidos mas não editáveis.
 
 ## Ao trabalhar aqui

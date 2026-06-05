@@ -10,12 +10,14 @@ from app.models import (
 )
 
 
-def _setup_funcionario(saldo=16):
+def _setup_funcionario(saldo=16, setor_id=None):
     hoje = date.today()
     emp = Empresa(nome="Teste Ltda")
     db.session.add(emp)
     db.session.flush()
-    f = Funcionario(empresa_id=emp.id, codigo="1", nome="FULANO DE TAL")
+    f = Funcionario(
+        empresa_id=emp.id, setor_id=setor_id, codigo="1", nome="FULANO DE TAL"
+    )
     db.session.add(f)
     db.session.flush()
     p = PeriodoAquisitivo(
@@ -32,7 +34,7 @@ def _setup_funcionario(saldo=16):
 
 
 def test_programar_consome_saldo(app, client_gestor, gestor_comum):
-    f, p = _setup_funcionario(saldo=16)
+    f, p = _setup_funcionario(saldo=16, setor_id=gestor_comum.setor_id)
     inicio = (date.today() + timedelta(days=45)).isoformat()
 
     r = client_gestor.post(
@@ -49,8 +51,8 @@ def test_programar_consome_saldo(app, client_gestor, gestor_comum):
     assert prog.criado_por_id == gestor_comum.id
 
 
-def test_nao_programa_alem_do_saldo(app, client_gestor):
-    f, p = _setup_funcionario(saldo=6)
+def test_nao_programa_alem_do_saldo(app, client_gestor, gestor_comum):
+    f, p = _setup_funcionario(saldo=6, setor_id=gestor_comum.setor_id)
     inicio = (date.today() + timedelta(days=45)).isoformat()
 
     r = client_gestor.post(
@@ -62,8 +64,8 @@ def test_nao_programa_alem_do_saldo(app, client_gestor):
     assert db.session.get(PeriodoAquisitivo, p.id).dias_restantes == 6  # inalterado
 
 
-def test_aviso_previo_30_dias(app, client_gestor):
-    f, p = _setup_funcionario(saldo=16)
+def test_aviso_previo_30_dias(app, client_gestor, gestor_comum):
+    f, p = _setup_funcionario(saldo=16, setor_id=gestor_comum.setor_id)
     cedo = (date.today() + timedelta(days=5)).isoformat()
 
     r = client_gestor.post(

@@ -34,6 +34,7 @@
       </div>
 
       <div style="margin-top:20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        {% if current_user.is_admin %}
         <form action="{{ url_for('funcionarios.definir_setor', func_id=f.id) }}" method="post" style="display:flex;align-items:center;gap:12px;margin:0">
           <label class="lbl" style="margin:0">Setor</label>
           <select class="field field-sm" style="width:auto" name="setor_id" onchange="this.form.submit()">
@@ -42,7 +43,8 @@
           </select>
           <noscript><button class="btn btn-ghost btn-sm" type="submit">Salvar</button></noscript>
         </form>
-        {% if tem_direito %}
+        {% endif %}
+        {% if tem_direito and current_user.pode_gerir(f) %}
         <a class="btn btn-accent" style="margin-left:auto" href="{{ url_for('programacao.programar', func_id=f.id) }}">{{ m.icon('calendar', 16) }} Programar férias</a>
         {% endif %}
       </div>

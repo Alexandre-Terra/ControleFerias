@@ -23,7 +23,22 @@ class Gestor(db.Model):
     senha_hash = db.Column(db.String(255), nullable=False)
     is_admin = db.Column(db.Boolean, nullable=False, default=False)
     ativo = db.Column(db.Boolean, nullable=False, default=True)
+    # Escopo de acesso: gestor não-admin só gere funcionários do seu setor.
+    # Admin ignora isto (vê/gere todos). Setor é global (cross-empresa).
+    setor_id = db.Column(db.Integer, db.ForeignKey("setor.id"), nullable=True)
     criado_em = db.Column(db.DateTime, default=_agora)
+
+    setor = db.relationship("Setor", back_populates="gestores")
+
+    def pode_gerir(self, funcionario):
+        """Admin gere todos; gestor de setor só gere o próprio setor.
+
+        Mesma regra que ``auth.filtrar_por_escopo`` aplica no nível de query —
+        manter as duas em sincronia.
+        """
+        if self.is_admin:
+            return True
+        return self.setor_id is not None and funcionario.setor_id == self.setor_id
 
 
 class Empresa(db.Model):
@@ -45,6 +60,7 @@ class Setor(db.Model):
     nome = db.Column(db.String(80), unique=True, nullable=False)
 
     funcionarios = db.relationship("Funcionario", back_populates="setor")
+    gestores = db.relationship("Gestor", back_populates="setor")
 
 
 class Funcionario(db.Model):

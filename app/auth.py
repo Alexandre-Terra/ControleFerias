@@ -18,12 +18,27 @@ from flask import (
     session,
     url_for,
 )
+from sqlalchemy import false
 from werkzeug.security import check_password_hash
 
 from .forms import LoginForm
-from .models import Gestor, db
+from .models import Funcionario, Gestor, db
 
 bp = Blueprint("auth", __name__)
+
+
+def filtrar_por_escopo(query, gestor):
+    """Restringe uma query de ``Funcionario`` ao escopo do gestor.
+
+    Admin: sem restrição. Gestor de setor: só o seu setor. Gestor não-admin
+    sem setor: nada. Espelha ``Gestor.pode_gerir`` no nível de query —
+    manter as duas em sincronia.
+    """
+    if gestor.is_admin:
+        return query
+    if gestor.setor_id is None:
+        return query.filter(false())
+    return query.filter(Funcionario.setor_id == gestor.setor_id)
 
 
 def current_user():
