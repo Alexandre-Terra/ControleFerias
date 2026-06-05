@@ -30,6 +30,7 @@ copy .env.example .env          # ajusta SECRET_KEY
 flask db upgrade                       # aplica migrations
 flask db migrate -m "mensagem"         # gera nova migration após mudar models.py
 flask import-xlsx .\Controle_Ferias_Master_Geral.xlsx
+flask import-setores .\Controle_Ferias_Master_Geral.xlsx   # setores (coluna B)
 flask seed-setores
 
 # primeiro admin (uma vez por ambiente — não tem fallback de senha única)
@@ -54,7 +55,7 @@ app/
   importer.py     parsing do XLSX (multi-linha por funcionário, serial→data, decimais)
   icons.py        ICONS: SVGs inline (set de ícones de linha do redesenho)
   uihelpers.py    iniciais() e avatar_cor() (avatar determinístico)
-  cli.py          comandos Flask: import-xlsx, seed-setores, criar-gestor, bootstrap-admin
+  cli.py          comandos Flask: import-xlsx, import-setores, seed-setores, criar-gestor, bootstrap-admin
   auth.py         login por email/senha (Gestor); helpers current_user, login_required, admin_required
   forms.py        Flask-WTF (Login, Programação, Gestor, MudarSenha)
   routes/         dashboard, funcionarios, gestores, programacao
@@ -103,6 +104,7 @@ Precedência (pior caso primeiro): `VENCIDA > A_VENCER > TEM_DIREITO > PROGRAMAD
 - Import inicial via Railway CLI (planilha fica local — está no `.gitignore`):
   - dry-run: `railway run flask import-xlsx ./Controle_Ferias_Master_Geral.xlsx --dry-run`
   - real: `railway run flask import-xlsx ./Controle_Ferias_Master_Geral.xlsx`
+  - setores (depois do import acima, pois casa por empresa+código): `railway run flask import-setores ./Controle_Ferias_Master_Geral.xlsx --dry-run` e então sem `--dry-run`
 - Admin (bootstrap por ambiente): `flask bootstrap-admin` roda a cada deploy (parte do `startCommand`) e, a partir de `ADMIN_EMAIL`/`ADMIN_SENHA`, **cria** o admin se não existir e **ressincroniza** a senha + reativa/promove (`ativo`, `is_admin`) se já existir. É idempotente e seguro de manter no `startCommand`.
   - Sem `ADMIN_EMAIL`/`ADMIN_SENHA` no painel → o comando é no-op (não há fallback de senha fixa); a instância fica trancada até você configurá-las e refazer o deploy.
   - `ADMIN_SENHA` precisa ter ≥ 6 caracteres — se for menor, o comando falha de propósito e bloqueia o deploy (o deploy anterior continua servindo).
@@ -112,7 +114,7 @@ Precedência (pior caso primeiro): `VENCIDA > A_VENCER > TEM_DIREITO > PROGRAMAD
 
 ## Limitações conhecidas (não "corrigir" sem pedir)
 
-- **Setor por funcionário** não vem da planilha — começa "Não definido", atribuído via edição inline.
+- **Setor por funcionário** vem da coluna B das abas de empresa via `flask import-setores` (texto livre mapeado para vocabulário canônico — `SETOR_CANONICO` no importer); também pode ser ajustado por edição inline. Funcionário sem setor na planilha fica "Não definido" (ex.: a aba `AMP Comercio`).
 - **Login** é por gestor identificado (email/senha). Sem reset por email, sem self-service para o gestor mudar a própria senha (apenas admin reseta via `/gestores/<id>/senha`). A senha do admin de `ADMIN_EMAIL` é recuperável trocando `ADMIN_SENHA` e refazendo o deploy (ver Deploy). Sem filtro por empresa — todos os gestores logados veem todas as empresas.
 - **Abono, 13º, faltas** estão fora de escopo nesta versão — valores importados são exibidos mas não editáveis.
 

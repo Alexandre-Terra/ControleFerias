@@ -9,4 +9,5 @@ instance/
 *.log
 server.log
 *.xlsx
+.~lock.*#
 render.yaml

@@ -3,7 +3,7 @@ import click
 from flask import Blueprint, current_app
 from werkzeug.security import generate_password_hash
 
-from .importer import importar_xlsx
+from .importer import importar_setores, importar_xlsx
 from .models import Gestor, db
 
 bp = Blueprint("cli", __name__, cli_group=None)
@@ -40,6 +40,52 @@ def import_xlsx_command(caminho, dry_run):
         for a in rel["avisos"]:
             click.echo(f"  - {a}")
     else:
+        click.echo("\nSem divergências.")
+
+    if dry_run:
+        click.echo(
+            "\nNada foi gravado (dry-run). "
+            "Rode novamente sem --dry-run para persistir."
+        )
+
+
+@bp.cli.command("import-setores")
+@click.argument("caminho")
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Simula (rollback ao final) e mostra o que mudaria.",
+)
+def import_setores_command(caminho, dry_run):
+    """Atribui setores aos funcionários a partir da coluna B da planilha.
+
+    Idempotente; casa por empresa (aba) + código. Os funcionários já devem
+    existir — rode ``import-xlsx`` antes.
+    """
+    rel = importar_setores(caminho, dry_run=dry_run)
+
+    prefixo = "[DRY-RUN] " if dry_run else ""
+    click.echo(f"{prefixo}Importação de setores:")
+    click.echo(f"  setores_criados = {rel['setores_criados']:4d}")
+    click.echo(f"  atribuidos      = {rel['atribuidos']:4d}")
+    click.echo(f"  inalterados     = {rel['inalterados']:4d}")
+    click.echo(f"  sem_setor       = {rel['sem_setor']:4d}")
+
+    if rel["nao_encontrados"]:
+        click.echo(
+            f"\nFuncionários não encontrados no banco "
+            f"({len(rel['nao_encontrados'])}):"
+        )
+        for n in rel["nao_encontrados"]:
+            click.echo(f"  - {n}")
+        click.echo("  Rode 'flask import-xlsx' antes para criar os funcionários.")
+
+    if rel["avisos"]:
+        click.echo(f"\nAvisos ({len(rel['avisos'])}):")
+        for a in rel["avisos"]:
+            click.echo(f"  - {a}")
+
+    if not rel["nao_encontrados"] and not rel["avisos"]:
         click.echo("\nSem divergências.")
 
     if dry_run:

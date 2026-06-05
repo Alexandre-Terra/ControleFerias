@@ -8,6 +8,10 @@ SETORES_PADRAO = [
     "Logística",
     "Comercial",
     "Marketing",
+    # Vindos da coluna B das abas de empresa (ver SETOR_CANONICO no importer).
+    "Administrativo",
+    "Licitação",
+    "Obras",
 ]
 
 
