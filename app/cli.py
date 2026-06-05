@@ -1,4 +1,6 @@
 """Comandos de linha de comando do Flask."""
+import re
+
 import click
 from flask import Blueprint, current_app
 from werkzeug.security import generate_password_hash
@@ -7,6 +9,12 @@ from .importer import importar_setores, importar_xlsx
 from .models import Gestor, db
 
 bp = Blueprint("cli", __name__, cli_group=None)
+
+
+def _banco_alvo():
+    """URI do banco com a senha mascarada — para o usuário conferir o destino."""
+    uri = current_app.config["SQLALCHEMY_DATABASE_URI"]
+    return re.sub(r"//([^:/@]+):[^@]+@", r"//\1:***@", uri)
 
 
 @bp.cli.command("import-xlsx")
@@ -62,6 +70,8 @@ def import_setores_command(caminho, dry_run):
     Idempotente; casa por empresa (aba) + código. Os funcionários já devem
     existir — rode ``import-xlsx`` antes.
     """
+    click.echo(f"Banco alvo: {_banco_alvo()}")
+
     rel = importar_setores(caminho, dry_run=dry_run)
 
     prefixo = "[DRY-RUN] " if dry_run else ""
