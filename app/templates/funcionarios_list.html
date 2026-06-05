@@ -5,11 +5,11 @@
 {% block content %}
 <div style="display:grid;gap:20px">
 
-  <div class="reveal r1" style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px">
+  <div class="reveal r1" style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:16px">
     <div>
       <div class="eyebrow" style="margin-bottom:8px">Colaboradores</div>
       <h2 class="display" style="font-size:24px;letter-spacing:-.03em">Funcionários</h2>
-      <div style="color:var(--ink-2);font-size:13.5px;margin-top:6px">{{ linhas | length }} de {{ total }} colaboradores</div>
+      <div style="color:var(--ink-2);font-size:13.5px;margin-top:6px">{{ linhas | length }} de {{ total }} colaboradores · {{ empresas | length }} empresa{{ 's' if empresas | length != 1 }}</div>
     </div>
   </div>
 
@@ -65,7 +65,7 @@
           <div class="mono" style="font-size:11px;color:var(--ink-3)">#{{ l.f.codigo }}</div>
         </div>
       </div>
-      <div style="font-size:13px">{{ l.f.empresa.nome.split()[0] if l.f.empresa else '—' }}</div>
+      <div style="font-size:13px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ l.f.empresa.nome if l.f.empresa else '—' }}</div>
       <div style="font-size:13px;color:var(--ink-2)">{{ l.f.setor.nome if l.f.setor else '—' }}</div>
       <div class="tnum" style="font-size:14px;font-weight:700">{{ '%g'|format(l.restantes) if l.restantes else '—' }}</div>
       <div class="tnum" style="font-size:12.5px;color:var(--ink-2)">

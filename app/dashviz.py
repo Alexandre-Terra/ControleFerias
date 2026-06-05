@@ -26,9 +26,10 @@ def _ultimo_dia(ano, mes):
 
 
 def _curto(empresa):
-    """Rótulo curto da empresa (primeira palavra do nome)."""
-    nome = empresa.nome if empresa else "—"
-    return nome.split()[0] if nome else "—"
+    """Rótulo da empresa. Nome completo — a truncagem visual fica por conta do
+    CSS (ellipsis), para não perder a segunda palavra de nomes como
+    "Rio Verde Serviços" (truncar por palavra perderia "Verde")."""
+    return empresa.nome if empresa else "—"
 
 
 def dias_para_limite(funcionario, hoje, dav):

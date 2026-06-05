@@ -41,10 +41,12 @@
         <div>
           <label class="lbl">Email</label>
           {{ form.email(class_="field", type="email", autofocus=true, placeholder="voce@empresa.com") }}
+          {% for e in form.email.errors %}<p style="color:var(--risk);font-size:12px;margin:6px 0 0">{{ e }}</p>{% endfor %}
         </div>
         <div>
           <label class="lbl">Senha</label>
           {{ form.senha(class_="field", placeholder="••••••••") }}
+          {% for e in form.senha.errors %}<p style="color:var(--risk);font-size:12px;margin:6px 0 0">{{ e }}</p>{% endfor %}
         </div>
         <button class="btn btn-primary" type="submit" style="width:100%;padding:12px;margin-top:4px">Entrar {{ m.icon('arrowUpRight', 16) }}</button>
       </form>

@@ -135,7 +135,7 @@
             {{ m.avatar(row.nome, 26) }}
             <div style="min-width:0">
               <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ row.nome }}</div>
-              <div style="font-size:10.5px;color:var(--ink-3);font-family:'Space Mono',monospace">{{ row.empresa }}</div>
+              <div style="font-size:10.5px;color:var(--ink-3);font-family:'Space Mono',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ row.empresa }}</div>
             </div>
           </div>
           <div style="position:relative;flex:1;height:100%">
@@ -213,7 +213,7 @@
             {{ m.avatar(p.nome, 30, p.status) }}
             <div style="min-width:0;flex:1">
               <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.nome }}</div>
-              <div style="font-size:11px;color:var(--ink-3)">{{ p.empresa }}</div>
+              <div style="font-size:11px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.empresa }}</div>
             </div>
             <div style="text-align:right">
               <div class="tnum" style="font-size:13px;font-weight:700">{{ p.data.strftime('%d/%m') }}</div>
@@ -246,7 +246,7 @@
           {{ m.avatar(r.nome, 34) }}
           <div style="min-width:0">
             <div style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.nome }}</div>
-            <div class="mono" style="font-size:11px;color:var(--ink-3)">#{{ r.codigo }} · {{ r.empresa }} · {{ r.setor }}</div>
+            <div class="mono" style="font-size:11px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">#{{ r.codigo }} · {{ r.empresa }} · {{ r.setor }}</div>
           </div>
         </div>
         <div class="{{ STATUS_CLASS[r.status] }}" style="font-size:13px">
