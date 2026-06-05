@@ -22,3 +22,10 @@ class Config:
 
     # Dias antes do limite de gozo (AH) em que o período entra em "A vencer".
     ALERTA_A_VENCER_DIAS = int(os.environ.get("ALERTA_A_VENCER_DIAS", "60"))
+
+    # Bootstrap do admin via ambiente (usado por `flask bootstrap-admin`, que roda
+    # no deploy). Sem fallback: se ADMIN_EMAIL/ADMIN_SENHA não estiverem setados,
+    # o comando vira no-op. Ver app/cli.py.
+    ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL")
+    ADMIN_NOME = os.environ.get("ADMIN_NOME", "Administrador")
+    ADMIN_SENHA = os.environ.get("ADMIN_SENHA")

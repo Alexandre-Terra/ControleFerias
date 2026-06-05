@@ -1,6 +1,6 @@
 """Comandos de linha de comando do Flask."""
 import click
-from flask import Blueprint
+from flask import Blueprint, current_app
 from werkzeug.security import generate_password_hash
 
 from .importer import importar_xlsx
@@ -87,3 +87,58 @@ def criar_gestor_command(email, nome, senha, admin):
     db.session.commit()
     papel = "admin" if admin else "gestor"
     click.echo(f"Criado {papel} {g.nome} <{g.email}> (id={g.id}).")
+
+
+@bp.cli.command("bootstrap-admin")
+def bootstrap_admin_command():
+    """Garante um admin a partir de ADMIN_EMAIL/ADMIN_SENHA (idempotente).
+
+    Pensado para rodar no deploy (parte do startCommand), depois do
+    ``flask db upgrade``. Comportamento:
+
+    - Sem ADMIN_EMAIL ou ADMIN_SENHA → no-op (exit 0). Permite subir o app
+      antes de configurar o admin; honra "sem senha padrão fixa".
+    - Variáveis setadas mas inválidas (senha curta) → falha (exit != 0), para
+      bloquear o deploy e evitar travar fora sem perceber.
+    - Admin já existe → sincroniza a senha e reativa/promove (ativo + is_admin).
+    - Admin não existe → cria.
+    """
+    email = (current_app.config.get("ADMIN_EMAIL") or "").strip().lower()
+    senha = current_app.config.get("ADMIN_SENHA") or ""
+    nome = (current_app.config.get("ADMIN_NOME") or "Administrador").strip()
+
+    if not email or not senha:
+        click.echo(
+            "bootstrap-admin: ADMIN_EMAIL/ADMIN_SENHA não configurados — "
+            "nada a fazer."
+        )
+        return
+
+    if len(senha) < 6:
+        raise click.ClickException(
+            "bootstrap-admin: ADMIN_SENHA precisa ter ao menos 6 caracteres. "
+            "Corrija a variável de ambiente e refaça o deploy."
+        )
+
+    senha_hash = generate_password_hash(senha)
+    g = Gestor.query.filter_by(email=email).first()
+    if g is None:
+        g = Gestor(
+            nome=nome,
+            email=email,
+            senha_hash=senha_hash,
+            is_admin=True,
+            ativo=True,
+        )
+        db.session.add(g)
+        db.session.commit()
+        click.echo(f"bootstrap-admin: admin criado <{email}> (id={g.id}).")
+    else:
+        g.senha_hash = senha_hash
+        g.is_admin = True
+        g.ativo = True
+        db.session.commit()
+        click.echo(
+            f"bootstrap-admin: admin <{email}> sincronizado "
+            "(senha redefinida, ativo, is_admin)."
+        )
