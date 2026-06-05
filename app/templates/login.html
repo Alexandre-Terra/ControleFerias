@@ -4,8 +4,8 @@
 {% block fullbleed %}
 <div style="min-height:100vh;display:grid;grid-template-columns:1.1fr 1fr">
 
-  {# ---- painel editorial ---- #}
-  <div style="background:var(--ink);color:var(--paper);padding:48px 56px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden">
+  {# ---- painel editorial (sempre escuro, nos dois temas, p/ o âmbar destacar) ---- #}
+  <div style="--ink:#1A140D;--paper:#FBF8F2;--accent:#F8B73E;--accent-2:#F8B73E;background:var(--ink);color:var(--paper);padding:48px 56px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden">
     <div style="position:absolute;right:-80px;top:-60px;width:360px;height:360px;border-radius:999px;background:radial-gradient(circle, color-mix(in srgb, var(--accent) 36%, transparent), transparent 65%)"></div>
     <div style="display:flex;align-items:center;gap:11px;position:relative">
       <span style="width:38px;height:38px;border-radius:11px;background:var(--accent);color:var(--ink);display:grid;place-items:center">{{ m.icon('umbrella', 21, 2) }}</span>

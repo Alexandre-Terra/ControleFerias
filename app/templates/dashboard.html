@@ -199,7 +199,7 @@
           {% for bar in d.trend %}
           <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;height:100%;justify-content:flex-end">
             <span class="tnum" style="font-size:13px;font-weight:700;color:{{ 'var(--ink)' if bar.n else 'var(--ink-3)' }}">{{ bar.n }}</span>
-            <div class="grow-h" style="width:100%;max-width:30px;height:{{ bar.h }}px;border-radius:6px;background:{{ 'var(--accent)' if bar.n else 'var(--line)' }}"></div>
+            <div class="grow-h" style="width:100%;max-width:30px;height:{{ bar.h }}px;border-radius:6px;background:{{ 'var(--accent)' if bar.n else 'var(--line)' }};animation-delay:{{ loop.index0 * 0.05 }}s"></div>
             <span style="font-size:10px;color:var(--ink-3);font-family:'Space Mono',monospace;letter-spacing:.08em">{{ bar.label }}</span>
           </div>
           {% endfor %}
@@ -239,7 +239,7 @@
       <a class="btn btn-ghost btn-sm" href="{{ url_for('funcionarios.listar', status='RISCO') }}">Abrir em Funcionários {{ m.icon('arrowUpRight', 15) }}</a>
     </div>
     <div style="display:grid;gap:2px">
-      {% for r in d.risco[:8] %}
+      {% for r in d.risco[:7] %}
       <div style="display:grid;grid-template-columns:26px minmax(0,2.4fr) minmax(0,1.3fr) auto auto;align-items:center;gap:14px;padding:12px 8px;{{ 'border-top:1px solid var(--line)' if not loop.first }}">
         <span class="mono tnum" style="font-size:12px;color:var(--ink-3)">{{ '%02d'|format(loop.index) }}</span>
         <div style="display:flex;align-items:center;gap:11px;min-width:0">
@@ -261,8 +261,8 @@
       <div style="padding:24px 0;text-align:center;color:var(--ink-3);font-size:13.5px">Nenhum colaborador em risco. 🎉</div>
       {% endfor %}
     </div>
-    {% if d.risco | length > 8 %}
-    <div style="margin-top:12px;font-size:12.5px;color:var(--ink-3)">+ {{ d.risco | length - 8 }} outros em risco — veja a lista completa.</div>
+    {% if d.risco | length > 7 %}
+    <div style="margin-top:12px;font-size:12.5px;color:var(--ink-3)">+ {{ d.risco | length - 7 }} outros em risco — veja a lista completa.</div>
     {% endif %}
   </div>
 
