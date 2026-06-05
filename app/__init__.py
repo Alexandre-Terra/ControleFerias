@@ -21,7 +21,7 @@ def create_app(config_class=Config):
     csrf.init_app(app)
 
     from . import auth, cli
-    from .routes import dashboard, funcionarios, gestores, programacao
+    from .routes import dashboard, funcionarios, gestores, programacao, setores
 
     app.register_blueprint(auth.bp)
     app.register_blueprint(cli.bp)
@@ -29,6 +29,7 @@ def create_app(config_class=Config):
     app.register_blueprint(funcionarios.bp)
     app.register_blueprint(gestores.bp)
     app.register_blueprint(programacao.bp)
+    app.register_blueprint(setores.bp)
 
     # Rotas POST sem Flask-WTF (ferramenta interna, documentado no README/CLAUDE).
     csrf.exempt(app.view_functions["auth.logout"])

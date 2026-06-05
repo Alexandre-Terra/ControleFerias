@@ -23,7 +23,7 @@ def index():
             joinedload(Funcionario.programacoes),
             joinedload(Funcionario.empresa),
             joinedload(Funcionario.setor),
-        ),
+        ).filter(Funcionario.ativo.is_(True)),
         current_user(),
     ).all()
 

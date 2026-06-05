@@ -54,6 +54,26 @@ class GestorForm(FlaskForm):
     submit = SubmitField("Salvar")
 
 
+class SetorForm(FlaskForm):
+    """Criação/renomeação de setor pelo admin."""
+    nome = StringField("Nome", validators=[DataRequired(), Length(max=80)])
+    submit = SubmitField("Salvar")
+
+
+class FuncionarioForm(FlaskForm):
+    """Cadastro manual de funcionário pelo admin (novos colaboradores).
+
+    Períodos aquisitivos continuam vindo do importer — não há entrada manual.
+    """
+    empresa_id = SelectField("Empresa", coerce=int, validators=[DataRequired()])
+    # 0 = "— Não definido"; choices preenchidas na rota.
+    setor_id = SelectField("Setor", coerce=int, validators=[Optional()])
+    codigo = StringField("Código", validators=[DataRequired(), Length(max=40)])
+    nome = StringField("Nome", validators=[DataRequired(), Length(max=160)])
+    data_admissao = DateField("Admissão", validators=[Optional()])
+    submit = SubmitField("Salvar")
+
+
 class MudarSenhaForm(FlaskForm):
     """Reset de senha pelo admin."""
     senha = PasswordField(

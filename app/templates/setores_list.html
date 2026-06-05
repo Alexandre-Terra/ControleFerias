@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% import '_macros.html' as m with context %}
+{% block title %}Setores · Controle de Férias{% endblock %}
+{% block page_title %}Setores{% endblock %}
+{% block content %}
+<div style="display:grid;gap:20px">
+
+  <div class="reveal r1" style="margin-bottom:4px">
+    <div class="eyebrow" style="margin-bottom:8px">Administração</div>
+    <h2 class="display" style="font-size:24px;letter-spacing:-.03em">Setores</h2>
+    <div style="color:var(--ink-2);font-size:13.5px;margin-top:6px;max-width:560px">Setores são compartilhados entre as empresas e definem o escopo dos gestores. Um setor só pode ser excluído quando não há ninguém associado a ele.</div>
+  </div>
+
+  {# ---- criar setor ---- #}
+  <form method="post" action="{{ url_for('setores.novo') }}" class="reveal r2 panel" style="padding:16px;display:flex;gap:12px;align-items:end;flex-wrap:wrap">
+    {{ form.hidden_tag() }}
+    <div style="flex:1;min-width:220px">
+      <label class="lbl">Novo setor</label>
+      {{ form.nome(class_="field", placeholder="Ex: Produção") }}
+      {% for e in form.nome.errors %}<p style="color:var(--risk);font-size:12px;margin:6px 0 0">{{ e }}</p>{% endfor %}
+    </div>
+    <button class="btn btn-accent" type="submit" style="height:42px">{{ m.icon('plus', 16) }} Adicionar</button>
+  </form>
+
+  {# ---- lista ---- #}
+  <div class="reveal r3 panel" style="overflow:hidden">
+    <div style="display:grid;grid-template-columns:minmax(0,2fr) .8fr .8fr auto;gap:14px;padding:13px 20px;background:var(--surface-2);border-bottom:1px solid var(--line)">
+      {% for h in ['Setor', 'Funcionários', 'Gestores', ''] %}<div class="eyebrow" style="font-size:10.5px">{{ h }}</div>{% endfor %}
+    </div>
+    {% for s in setores %}
+    {% set n_func, n_gest = contagens[s.id] %}
+    {% set em_uso = n_func or n_gest %}
+    <div style="display:grid;grid-template-columns:minmax(0,2fr) .8fr .8fr auto;gap:14px;padding:11px 20px;align-items:center;{{ 'border-top:1px solid var(--line)' if not loop.first }}">
+      <form action="{{ url_for('setores.renomear', setor_id=s.id) }}" method="post" style="display:flex;align-items:center;gap:8px;margin:0;min-width:0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input class="field field-sm" name="nome" value="{{ s.nome }}" style="min-width:0">
+        <button class="btn btn-ghost btn-sm" type="submit" title="Renomear">{{ m.icon('check', 15) }}</button>
+      </form>
+      <div class="tnum" style="font-size:14px;font-weight:700">{{ n_func }}</div>
+      <div class="tnum" style="font-size:14px;font-weight:700">{{ n_gest }}</div>
+      <form action="{{ url_for('setores.excluir', setor_id=s.id) }}" method="post" style="display:inline-flex;margin:0;justify-content:flex-end">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" {% if em_uso %}disabled title="Setor em uso — reatribua antes de excluir"{% endif %}
+          style="background:none;border:0;cursor:{{ 'not-allowed' if em_uso else 'pointer' }};color:{{ 'var(--ink-3)' if em_uso else 'var(--risk)' }};font-size:13px;font-weight:600;opacity:{{ '.5' if em_uso else '1' }}">Excluir</button>
+      </form>
+    </div>
+    {% else %}
+    <div style="padding:40px;text-align:center;color:var(--ink-3)">Nenhum setor cadastrado.</div>
+    {% endfor %}
+  </div>
+
+</div>
+{% endblock %}

@@ -7,10 +7,20 @@
 
   <div class="reveal r1" style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:16px">
     <div>
-      <div class="eyebrow" style="margin-bottom:8px">Colaboradores</div>
-      <h2 class="display" style="font-size:24px;letter-spacing:-.03em">Funcionários</h2>
+      <div class="eyebrow" style="margin-bottom:8px">{{ 'Inativos' if mostrar_inativos else 'Colaboradores' }}</div>
+      <h2 class="display" style="font-size:24px;letter-spacing:-.03em">Funcionários{{ ' inativos' if mostrar_inativos }}</h2>
       <div style="color:var(--ink-2);font-size:13.5px;margin-top:6px">{{ linhas | length }} de {{ total }} colaboradores · {{ empresas | length }} empresa{{ 's' if empresas | length != 1 }}</div>
     </div>
+    {% if current_user.is_admin %}
+    <div style="display:flex;align-items:center;gap:12px">
+      {% if mostrar_inativos %}
+      <a class="btn btn-ghost btn-sm" href="{{ url_for('funcionarios.listar') }}">{{ m.icon('users', 15) }} Ver ativos</a>
+      {% else %}
+      <a class="btn btn-ghost btn-sm" href="{{ url_for('funcionarios.listar', inativos=1) }}">Ver inativos</a>
+      <a class="btn btn-accent" href="{{ url_for('funcionarios.novo') }}">{{ m.icon('plus', 16) }} Novo funcionário</a>
+      {% endif %}
+    </div>
+    {% endif %}
   </div>
 
   {# ---- filtros (GET) ---- #}

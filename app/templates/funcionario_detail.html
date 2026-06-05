@@ -33,6 +33,18 @@
         </div>
       </div>
 
+      {% if not f.ativo %}
+      <div style="margin-top:18px;padding:14px 16px;border-radius:12px;background:color-mix(in srgb, var(--ink-3) 12%, var(--surface));border:1px solid var(--line);display:flex;align-items:center;gap:13px;flex-wrap:wrap">
+        <span style="color:var(--ink-2)">{{ m.icon('alert', 20) }}</span>
+        <div style="font-size:14px;flex:1"><strong>Funcionário inativo.</strong> Não aparece nas listas nem no painel.</div>
+        {% if current_user.is_admin %}
+        <form action="{{ url_for('funcionarios.reativar', func_id=f.id) }}" method="post" style="margin:0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-primary btn-sm" type="submit">{{ m.icon('check', 15) }} Reativar</button>
+        </form>
+        {% endif %}
+      </div>
+      {% else %}
       <div style="margin-top:20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
         {% if current_user.is_admin %}
         <form action="{{ url_for('funcionarios.definir_setor', func_id=f.id) }}" method="post" style="display:flex;align-items:center;gap:12px;margin:0">
@@ -45,9 +57,16 @@
         </form>
         {% endif %}
         {% if tem_direito and current_user.pode_gerir(f) %}
-        <a class="btn btn-accent" style="margin-left:auto" href="{{ url_for('programacao.programar', func_id=f.id) }}">{{ m.icon('calendar', 16) }} Programar férias</a>
+        <a class="btn btn-accent" href="{{ url_for('programacao.programar', func_id=f.id) }}">{{ m.icon('calendar', 16) }} Programar férias</a>
+        {% endif %}
+        {% if current_user.is_admin %}
+        <form action="{{ url_for('funcionarios.inativar', func_id=f.id) }}" method="post" style="margin:0 0 0 auto">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" style="background:none;border:0;cursor:pointer;color:var(--risk);font-size:13px;font-weight:600">Inativar</button>
+        </form>
         {% endif %}
       </div>
+      {% endif %}
     </div>
   </div>
 

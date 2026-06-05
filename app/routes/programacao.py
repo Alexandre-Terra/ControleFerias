@@ -38,6 +38,9 @@ def programar(func_id):
     f = db.get_or_404(Funcionario, func_id)
     if not current_user().pode_gerir(f):
         abort(403)
+    if not f.ativo:
+        flash("Funcionário inativo — reative antes de programar férias.", "erro")
+        return redirect(url_for("funcionarios.detalhe", func_id=func_id))
 
     elegiveis = _periodos_elegiveis(f, hoje)
     form = ProgramacaoForm()

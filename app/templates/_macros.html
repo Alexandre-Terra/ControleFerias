@@ -55,6 +55,7 @@
   {% set items = [
     ('dashboard.index', 'Painel', 'grid', bp == 'dashboard', false),
     ('funcionarios.listar', 'Funcionários', 'users', bp in ['funcionarios', 'programacao'], false),
+    ('setores.listar', 'Setores', 'building', bp == 'setores', true),
     ('gestores.listar', 'Gestores', 'shield', bp == 'gestores', true)
   ] -%}
   {% for endpoint, label, ic, active, admin_only in items -%}

@@ -14,6 +14,7 @@ from flask import (
 from sqlalchemy.orm import joinedload
 
 from ..auth import admin_required, current_user, filtrar_por_escopo, login_required
+from ..forms import FuncionarioForm
 from ..models import Empresa, Funcionario, Setor, db
 from .. import dashviz
 from .. import status as st
@@ -37,14 +38,18 @@ def listar():
     busca = (request.args.get("busca") or "").strip()
 
     # Carrega tudo (dentro do escopo do gestor) e calcula o status uma vez —
-    # os chips mostram contagens do conjunto escopado.
+    # os chips mostram contagens do conjunto escopado. Por padrão só ativos;
+    # admin pode ver os inativos via ?inativos=1 (para reativar pelo detalhe).
+    mostrar_inativos = bool(current_user().is_admin and request.args.get("inativos"))
     funcionarios = filtrar_por_escopo(
         Funcionario.query.options(
             joinedload(Funcionario.periodos),
             joinedload(Funcionario.programacoes),
             joinedload(Funcionario.empresa),
             joinedload(Funcionario.setor),
-        ).order_by(Funcionario.nome),
+        )
+        .filter(Funcionario.ativo.is_(not mostrar_inativos))
+        .order_by(Funcionario.nome),
         current_user(),
     ).all()
 
@@ -96,6 +101,7 @@ def listar():
         empresas=Empresa.query.order_by(Empresa.nome).all(),
         setores=Setor.query.order_by(Setor.nome).all(),
         status_opcoes=st.PRECEDENCIA,
+        mostrar_inativos=mostrar_inativos,
         filtros={
             "empresa": empresa_id,
             "setor": setor_id,
@@ -103,6 +109,59 @@ def listar():
             "busca": busca,
         },
     )
+
+
+@bp.route("/novo", methods=["GET", "POST"])
+@admin_required
+def novo():
+    form = FuncionarioForm()
+    form.empresa_id.choices = [
+        (e.id, e.nome) for e in Empresa.query.order_by(Empresa.nome).all()
+    ]
+    form.setor_id.choices = [(0, "— Não definido")] + [
+        (s.id, s.nome) for s in Setor.query.order_by(Setor.nome).all()
+    ]
+    if form.validate_on_submit():
+        codigo = form.codigo.data.strip()
+        existe = Funcionario.query.filter_by(
+            empresa_id=form.empresa_id.data, codigo=codigo
+        ).first()
+        if existe:
+            flash("Já existe funcionário com esse código nesta empresa.", "erro")
+        else:
+            f = Funcionario(
+                empresa_id=form.empresa_id.data,
+                setor_id=form.setor_id.data or None,
+                codigo=codigo,
+                nome=form.nome.data.strip(),
+                data_admissao=form.data_admissao.data,
+                ativo=True,
+            )
+            db.session.add(f)
+            db.session.commit()
+            flash(f"Funcionário {f.nome} criado.", "ok")
+            return redirect(url_for("funcionarios.detalhe", func_id=f.id))
+    return render_template("funcionario_form.html", form=form, modo="novo")
+
+
+@bp.route("/<int:func_id>/inativar", methods=["POST"])
+@admin_required
+def inativar(func_id):
+    f = db.get_or_404(Funcionario, func_id)
+    f.ativo = False
+    db.session.commit()
+    flash(f"Funcionário {f.nome} inativado.", "ok")
+    return redirect(url_for("funcionarios.detalhe", func_id=func_id))
+
+
+@bp.route("/<int:func_id>/reativar", methods=["POST"])
+@admin_required
+def reativar(func_id):
+    f = db.get_or_404(Funcionario, func_id)
+    f.ativo = True
+    db.session.commit()
+    flash(f"Funcionário {f.nome} reativado.", "ok")
+    return redirect(url_for("funcionarios.detalhe", func_id=func_id))
 
 
 @bp.route("/<int:func_id>")

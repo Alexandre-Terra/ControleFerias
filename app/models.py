@@ -77,6 +77,8 @@ class Funcionario(db.Model):
     nome = db.Column(db.String(160), nullable=False)
     data_admissao = db.Column(db.Date, nullable=True)
     vencto_ferias = db.Column(db.Date, nullable=True)
+    # Soft-delete: funcionário inativo some das listas/painel (admin reativa).
+    ativo = db.Column(db.Boolean, nullable=False, default=True)
 
     empresa = db.relationship("Empresa", back_populates="funcionarios")
     setor = db.relationship("Setor", back_populates="funcionarios")

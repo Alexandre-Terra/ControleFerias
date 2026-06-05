@@ -58,7 +58,7 @@ app/
   cli.py          comandos Flask: import-xlsx, import-setores, seed-setores, criar-gestor, bootstrap-admin
   auth.py         login por email/senha (Gestor); helpers current_user, login_required, admin_required
   forms.py        Flask-WTF (Login, Programação, Gestor, MudarSenha)
-  routes/         dashboard, funcionarios, gestores, programacao
+  routes/         dashboard, funcionarios, gestores, programacao, setores
   templates/      Jinja2 (design "Editorial Risk"); _macros.html (icon, status_pill, avatar, nav, brand…)
   static/         css/app.css (design system, claro/escuro), js/app.js (toggles + animações resilientes)
 migrations/       Alembic — DEVE ser commitada
@@ -116,6 +116,8 @@ Precedência (pior caso primeiro): `VENCIDA > A_VENCER > TEM_DIREITO > PROGRAMAD
 ## Limitações conhecidas (não "corrigir" sem pedir)
 
 - **Setor por funcionário** vem da coluna B das abas de empresa via `flask import-setores` (texto livre mapeado para vocabulário canônico — `SETOR_CANONICO` no importer); também pode ser ajustado por edição inline. Funcionário sem setor na planilha fica "Não definido" (ex.: a aba `AMP Comercio`).
+- **CRUD admin (UI):** o admin pode criar/renomear/excluir **setores** (`/setores`, blueprint `setores`) e adicionar **funcionários** (`/funcionarios/novo`). Excluir setor é **bloqueado** se houver qualquer funcionário (ativo ou inativo) ou gestor associado — para corrigir nome, renomear. Empresa continua vindo só do importer (sem CRUD).
+- **Remover funcionário = inativar (soft-delete):** `Funcionario.ativo` (migration `63859db4e304`, backfill `server_default=true`). Inativo some das listas e do painel e bloqueia programação; admin reativa pelo detalhe (lista tem toggle admin `?inativos=1`). **Filtragem do `ativo` mora em exatamente 2 queries de lista** (`dashboard.index`, `funcionarios.listar`) — ao criar novos caminhos de query de `Funcionario`, lembrar de aplicar o filtro. Funcionário criado manualmente nasce sem períodos aquisitivos → aparece como "Em formação" (períodos só vêm do importer).
 - **Login** é por gestor identificado (email/senha). Sem reset por email, sem self-service para o gestor mudar a própria senha (apenas admin reseta via `/gestores/<id>/senha`). A senha do admin de `ADMIN_EMAIL` é recuperável trocando `ADMIN_SENHA` e refazendo o deploy (ver Deploy).
 - **Acesso por setor (não por empresa):** o filtro de visão é por **setor**, não por empresa — um gestor não-admin de "Produção" vê Produção em **todas** as empresas. Admin atribui o setor ao gestor no cadastro (`/gestores/novo`) ou em `/gestores/<id>/editar`. **Consequência da migration `a15c6bf0c3a1`:** todo gestor não-admin pré-existente fica com `setor_id = NULL` e **não vê nada** até um admin atribuir um setor — é o efeito esperado de exigir setor para não-admin, não um bug. Gestor não-admin sem setor → listas/painel vazios e 403 nos detalhes.
 - **Abono, 13º, faltas** estão fora de escopo nesta versão — valores importados são exibidos mas não editáveis.
