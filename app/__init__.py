@@ -35,12 +35,18 @@ def create_app(config_class=Config):
     csrf.exempt(app.view_functions["funcionarios.definir_setor"])
 
     from . import status as status_mod
+    from . import uihelpers
+    from .icons import ICONS
 
     @app.context_processor
     def inject_globals():
         return {
             "STATUS_LABELS": status_mod.LABELS,
-            "STATUS_BADGE": status_mod.BADGE,
+            "STATUS_CLASS": status_mod.CLASS,
+            "STATUS_VAR": status_mod.VAR,
+            "ICONS": ICONS,
+            "iniciais": uihelpers.iniciais,
+            "avatar_cor": uihelpers.avatar_cor,
             "hoje": date.today(),
             "current_user": auth.current_user(),
         }

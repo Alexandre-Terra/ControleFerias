@@ -24,14 +24,25 @@ LABELS = {
     QUITADA: "Quitada",
 }
 
-# Classes Tailwind para os badges coloridos.
-BADGE = {
-    VENCIDA: "bg-red-100 text-red-800 ring-1 ring-red-300",
-    A_VENCER: "bg-yellow-100 text-yellow-800 ring-1 ring-yellow-300",
-    TEM_DIREITO: "bg-green-100 text-green-800 ring-1 ring-green-300",
-    PROGRAMADA: "bg-blue-100 text-blue-800 ring-1 ring-blue-300",
-    EM_FORMACAO: "bg-gray-100 text-gray-600 ring-1 ring-gray-300",
-    QUITADA: "bg-gray-50 text-gray-400 ring-1 ring-gray-200",
+# Classe de status do design "Editorial Risk" — define a CSS var --c usada por
+# pills, dots, faixas e realces. Ver app/static/css/app.css (.s-risk, .s-warn, …).
+CLASS = {
+    VENCIDA: "s-risk",
+    A_VENCER: "s-warn",
+    TEM_DIREITO: "s-ok",
+    PROGRAMADA: "s-info",
+    EM_FORMACAO: "s-idle",
+    QUITADA: "s-done",
+}
+
+# Nome curto da CSS var de cor (var(--risk), var(--warn), …) para os gráficos.
+VAR = {
+    VENCIDA: "risk",
+    A_VENCER: "warn",
+    TEM_DIREITO: "ok",
+    PROGRAMADA: "info",
+    EM_FORMACAO: "idle",
+    QUITADA: "done",
 }
 
 

@@ -1,15 +1,55 @@
 {% extends 'base.html' %}
-{% block content %}
-<div class="max-w-sm mx-auto mt-16 bg-white rounded-lg shadow p-6">
-  <h1 class="text-xl font-semibold mb-1">🏖️ Controle de Férias</h1>
-  <p class="text-sm text-gray-500 mb-5">Acesso dos gestores</p>
-  <form method="post">
-    {{ form.hidden_tag() }}
-    <label class="block text-sm font-medium mb-1">Email</label>
-    {{ form.email(class_="w-full border rounded px-3 py-2 mb-3", autofocus=true, type="email") }}
-    <label class="block text-sm font-medium mb-1">Senha</label>
-    {{ form.senha(class_="w-full border rounded px-3 py-2 mb-4") }}
-    {{ form.submit(class_="w-full bg-slate-800 text-white rounded py-2 hover:bg-slate-700 cursor-pointer") }}
-  </form>
+{% import '_macros.html' as m with context %}
+{% block title %}Entrar · Controle de Férias{% endblock %}
+{% block fullbleed %}
+<div style="min-height:100vh;display:grid;grid-template-columns:1.1fr 1fr">
+
+  {# ---- painel editorial ---- #}
+  <div style="background:var(--ink);color:var(--paper);padding:48px 56px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden">
+    <div style="position:absolute;right:-80px;top:-60px;width:360px;height:360px;border-radius:999px;background:radial-gradient(circle, color-mix(in srgb, var(--accent) 36%, transparent), transparent 65%)"></div>
+    <div style="display:flex;align-items:center;gap:11px;position:relative">
+      <span style="width:38px;height:38px;border-radius:11px;background:var(--accent);color:var(--ink);display:grid;place-items:center">{{ m.icon('umbrella', 21, 2) }}</span>
+      <span style="font-weight:800;font-size:15px">Controle de Férias</span>
+    </div>
+    <div style="position:relative">
+      <div class="eyebrow" style="color:color-mix(in srgb, var(--accent) 90%, white)">Gestão de férias · CLT</div>
+      <h1 style="font-size:40px;line-height:1.16;letter-spacing:-.035em;margin-top:18px">
+        <span style="display:block"><span class="display">Nenhuma</span> <span class="serif-it" style="font-size:42px;color:var(--accent)">férias vencida</span></span>
+        <span class="display" style="display:block">passa batido.</span>
+      </h1>
+      <p style="font-size:15px;color:color-mix(in srgb, var(--paper) 70%, transparent);margin-top:36px;max-width:380px;line-height:1.5">
+        Acompanhe direitos, prazos e programações dos colaboradores em múltiplas empresas — com o risco sempre à frente.
+      </p>
+    </div>
+    <div class="mono" style="font-size:11px;color:color-mix(in srgb, var(--paper) 45%, transparent);position:relative">STATUS RECALCULADO EM TEMPO REAL · {{ hoje.strftime('%d/%m/%Y') }}</div>
+  </div>
+
+  {# ---- formulário ---- #}
+  <div style="display:grid;place-items:center;padding:40px;position:relative">
+    <button class="btn btn-ghost btn-sm" type="button" data-toggle-theme style="position:absolute;top:24px;right:24px">
+      <span class="ic-light" style="display:inline-flex">{{ m.icon('moon', 15) }} Escuro</span>
+      <span class="ic-dark" style="display:inline-flex">{{ m.icon('sun', 15) }} Claro</span>
+    </button>
+    <div style="width:100%;max-width:360px">
+      <div class="eyebrow">Acesso dos gestores</div>
+      <h2 class="display" style="font-size:30px;margin-top:10px;margin-bottom:26px">Entrar</h2>
+      {% for cat, msg in _flashes %}{% if cat == 'erro' %}
+        <div class="alert s-risk" style="margin-bottom:16px"><span class="alert-ic">{{ m.icon('alert', 16) }}</span>{{ msg }}</div>
+      {% endif %}{% endfor %}
+      <form method="post" style="display:grid;gap:16px">
+        {{ form.hidden_tag() }}
+        <div>
+          <label class="lbl">Email</label>
+          {{ form.email(class_="field", type="email", autofocus=true, placeholder="voce@empresa.com") }}
+        </div>
+        <div>
+          <label class="lbl">Senha</label>
+          {{ form.senha(class_="field", placeholder="••••••••") }}
+        </div>
+        <button class="btn btn-primary" type="submit" style="width:100%;padding:12px;margin-top:4px">Entrar {{ m.icon('arrowUpRight', 16) }}</button>
+      </form>
+    </div>
+  </div>
+
 </div>
 {% endblock %}

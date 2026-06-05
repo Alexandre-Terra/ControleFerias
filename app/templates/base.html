@@ -1,45 +1,71 @@
 <!doctype html>
-<html lang="pt-br">
+<html lang="pt-br" data-theme="light" data-layout="sidebar">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Controle de Férias{% endblock %}</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    /* Aplica tema/layout antes do primeiro paint (sem flash). */
+    (function () {
+      try {
+        var e = document.documentElement;
+        var t = localStorage.getItem('cf_theme');
+        var l = localStorage.getItem('cf_layout');
+        e.setAttribute('data-theme', t === 'dark' ? 'dark' : 'light');
+        e.setAttribute('data-layout', l === 'topnav' ? 'topnav' : 'sidebar');
+      } catch (_) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 </head>
-<body class="bg-gray-50 text-gray-800">
-  {% if current_user %}
-  <nav class="bg-slate-800 text-white">
-    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center gap-6">
-      <a href="{{ url_for('dashboard.index') }}" class="font-semibold text-lg">🏖️ Controle de Férias</a>
-      <a href="{{ url_for('dashboard.index') }}" class="hover:text-amber-300">Dashboard</a>
-      <a href="{{ url_for('funcionarios.listar') }}" class="hover:text-amber-300">Funcionários</a>
-      {% if current_user.is_admin %}
-      <a href="{{ url_for('gestores.listar') }}" class="hover:text-amber-300">Gestores</a>
-      {% endif %}
-      <div class="ml-auto flex items-center gap-3">
-        <span class="text-sm text-slate-300">Olá, <strong class="text-white">{{ current_user.nome }}</strong></span>
-        <form action="{{ url_for('auth.logout') }}" method="post">
-          <button class="text-sm text-slate-300 hover:text-white">Sair</button>
-        </form>
-      </div>
-    </div>
-  </nav>
-  {% endif %}
-
-  <main class="max-w-6xl mx-auto px-4 py-6">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% for category, msg in messages %}
-        <div class="mb-3 rounded px-4 py-2 text-sm
-          {{ 'bg-red-100 text-red-800' if category == 'erro' else 'bg-green-100 text-green-800' }}">
-          {{ msg }}
+<body>
+{% import '_macros.html' as m with context %}
+{% set _flashes = get_flashed_messages(with_categories=true) %}
+{% if current_user %}
+  <div class="cf-shell">
+    <aside class="cf-sidebar">
+      <div style="padding:0 6px 22px">{{ m.brand() }}</div>
+      <nav style="display:grid;gap:4px">{{ m.nav_items('side') }}</nav>
+      <div style="margin-top:auto;display:grid;gap:14px;padding:0 4px">
+        <div class="panel" style="padding:14px;background:var(--surface-2)">
+          <div class="eyebrow" style="font-size:9.5px">Tema &amp; layout</div>
+          <div style="margin-top:10px">{{ m.theme_layout_controls() }}</div>
         </div>
-      {% endfor %}
-    {% endwith %}
-    {% block content %}{% endblock %}
-  </main>
-
-  <footer class="max-w-6xl mx-auto px-4 py-6 text-xs text-gray-400">
-    Hoje: {{ hoje.strftime('%d/%m/%Y') }} · Status recalculado em tempo real.
-  </footer>
+        <div class="mono" style="font-size:10px;color:var(--ink-3);padding:0 4px">HOJE {{ hoje.strftime('%d/%m/%Y') }}</div>
+      </div>
+    </aside>
+    <div class="cf-main">
+      <header class="cf-topbar">
+        <div class="cf-topbar-inner">
+          {{ m.brand() }}
+          <nav style="display:flex;gap:4px;margin-left:12px">{{ m.nav_items('top') }}</nav>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:14px">
+            {{ m.theme_layout_controls() }}
+            <div style="width:1px;height:26px;background:var(--line)"></div>
+            {{ m.user_menu(current_user) }}
+          </div>
+        </div>
+      </header>
+      <header class="cf-subheader">
+        <div style="font-size:15px;font-weight:700;letter-spacing:-.01em">{% block page_title %}{% endblock %}</div>
+        {{ m.user_menu(current_user) }}
+      </header>
+      <main class="cf-content">
+        {% for cat, msg in _flashes %}{% if cat == 'erro' %}
+          <div class="alert s-risk"><span class="alert-ic">{{ m.icon('alert', 18) }}</span>{{ msg }}</div>
+        {% endif %}{% endfor %}
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+  <div class="toast-wrap">
+    {% for cat, msg in _flashes %}{% if cat != 'erro' %}
+      <div class="toast"><span class="toast-ic">{{ m.icon('checkCircle', 18) }}</span>{{ msg }}</div>
+    {% endif %}{% endfor %}
+  </div>
+{% else %}
+  {% block fullbleed %}{% endblock %}
+{% endif %}
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>

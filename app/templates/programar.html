@@ -1,34 +1,69 @@
 {% extends 'base.html' %}
+{% import '_macros.html' as m with context %}
 {% block title %}Programar férias · {{ f.nome }}{% endblock %}
+{% block page_title %}Programar férias{% endblock %}
 {% block content %}
-<a href="{{ url_for('funcionarios.detalhe', func_id=f.id) }}" class="text-sm text-blue-700 hover:underline">&larr; Voltar</a>
+<div style="max-width:600px;margin:0 auto;display:grid;gap:20px">
 
-<div class="max-w-lg mx-auto bg-white rounded-lg shadow p-6 mt-3">
-  <h1 class="text-xl font-bold mb-1">Programar férias</h1>
-  <p class="text-sm text-gray-500 mb-5">{{ f.nome }} · {{ f.empresa.nome }}</p>
+  <a class="reveal r1" href="{{ url_for('funcionarios.detalhe', func_id=f.id) }}" style="display:inline-flex;align-items:center;gap:7px;color:var(--ink-2);font-size:13px;font-weight:600;width:fit-content">{{ m.icon('arrowLeft', 16) }} {{ f.nome }}</a>
 
-  <form method="post" class="space-y-4">
-    {{ form.hidden_tag() }}
+  <div class="reveal r2 panel" style="padding:0;overflow:hidden">
+    <div style="height:5px;background:var(--accent)"></div>
+    <div style="padding:26px 28px">
+      <div class="eyebrow" style="margin-bottom:9px">{{ f.empresa.nome }}</div>
+      <h1 class="display" style="font-size:28px">Programar férias</h1>
+      <div style="font-size:14px;color:var(--ink-2);margin-top:6px;margin-bottom:24px">{{ f.nome }}</div>
 
-    <div>
-      <label class="block text-sm font-medium mb-1">Período aquisitivo</label>
-      {{ form.periodo_id(class_="w-full border rounded px-3 py-2 text-sm") }}
+      <form method="post" style="display:grid;gap:18px">
+        {{ form.hidden_tag() }}
+
+        <div>
+          <label class="lbl">Período aquisitivo</label>
+          {{ form.periodo_id(class_="field") }}
+          {% for e in form.periodo_id.errors %}<p style="color:var(--risk);font-size:12px;margin:6px 0 0">{{ e }}</p>{% endfor %}
+        </div>
+
+        <div style="display:grid;grid-template-columns:1.4fr .8fr;gap:14px">
+          <div>
+            <label class="lbl">Início das férias</label>
+            {{ form.data_inicio(class_="field", type="date", min=data_minima.isoformat()) }}
+            {% for e in form.data_inicio.errors %}<p style="color:var(--risk);font-size:12px;margin:6px 0 0">{{ e }}</p>{% endfor %}
+          </div>
+          <div>
+            <label class="lbl">Dias de gozo</label>
+            {{ form.dias_gozo(class_="field", type="number", min="1", max="30") }}
+            {% for e in form.dias_gozo.errors %}<p style="color:var(--risk);font-size:12px;margin:6px 0 0">{{ e }}</p>{% endfor %}
+          </div>
+        </div>
+
+        <div class="s-warn" style="display:flex;gap:10px;align-items:center;font-size:12.5px;color:var(--ink-2);background:color-mix(in srgb, var(--warn) 10%, var(--surface));border:1px solid color-mix(in srgb, var(--warn) 28%, transparent);padding:11px 14px;border-radius:10px">
+          <span style="color:var(--c)">{{ m.icon('flag', 16) }}</span>
+          <span>Aviso prévio de 30 dias — início a partir de <strong style="color:var(--ink)">{{ data_minima.strftime('%d/%m/%Y') }}</strong>. Término previsto: <strong style="color:var(--ink)" id="term-prev">{{ fim_previsto.strftime('%d/%m/%Y') }}</strong>.</span>
+        </div>
+
+        <button class="btn btn-accent" type="submit" style="width:fit-content;padding:11px 22px">{{ m.icon('check', 16) }} Registrar programação</button>
+      </form>
     </div>
+  </div>
 
-    <div>
-      <label class="block text-sm font-medium mb-1">Início das férias</label>
-      {{ form.data_inicio(type="date", min=data_minima.isoformat(), class_="w-full border rounded px-3 py-2 text-sm") }}
-      <p class="text-xs text-gray-400 mt-1">
-        Aviso prévio de 30 dias: a partir de {{ data_minima.strftime('%d/%m/%Y') }}.
-      </p>
-    </div>
-
-    <div>
-      <label class="block text-sm font-medium mb-1">Dias de gozo</label>
-      {{ form.dias_gozo(class_="w-32 border rounded px-3 py-2 text-sm") }}
-    </div>
-
-    {{ form.submit(class_="bg-amber-500 text-white rounded px-5 py-2 text-sm hover:bg-amber-600 cursor-pointer") }}
-  </form>
 </div>
+<script>
+  (function () {
+    var di = document.getElementById('{{ form.data_inicio.id }}');
+    var dd = document.getElementById('{{ form.dias_gozo.id }}');
+    var out = document.getElementById('term-prev');
+    function upd() {
+      if (!di || !dd || !out) return;
+      var v = di.value, n = parseInt(dd.value, 10);
+      if (!v || isNaN(n) || n < 1) return;
+      var p = v.split('-'), dt = new Date(+p[0], +p[1] - 1, +p[2]);
+      dt.setDate(dt.getDate() + n - 1);
+      var D = String(dt.getDate()).padStart(2, '0'), M = String(dt.getMonth() + 1).padStart(2, '0');
+      out.textContent = D + '/' + M + '/' + dt.getFullYear();
+    }
+    if (di) di.addEventListener('input', upd);
+    if (dd) dd.addEventListener('input', upd);
+    upd();
+  })();
+</script>
 {% endblock %}

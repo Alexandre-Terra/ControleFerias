@@ -1,77 +1,82 @@
 {% extends 'base.html' %}
+{% import '_macros.html' as m with context %}
 {% block title %}Funcionários · Controle de Férias{% endblock %}
+{% block page_title %}Funcionários{% endblock %}
 {% block content %}
-<h1 class="text-2xl font-bold mb-4">Funcionários</h1>
+<div style="display:grid;gap:20px">
 
-<form method="get" class="bg-white rounded-lg shadow p-4 mb-5 grid md:grid-cols-5 gap-3 items-end">
-  <div>
-    <label class="block text-xs text-gray-500 mb-1">Busca (nome/código)</label>
-    <input name="busca" value="{{ filtros.busca }}" class="w-full border rounded px-2 py-1 text-sm">
+  <div class="reveal r1" style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px">
+    <div>
+      <div class="eyebrow" style="margin-bottom:8px">Colaboradores</div>
+      <h2 class="display" style="font-size:24px;letter-spacing:-.03em">Funcionários</h2>
+      <div style="color:var(--ink-2);font-size:13.5px;margin-top:6px">{{ linhas | length }} de {{ total }} colaboradores</div>
+    </div>
   </div>
-  <div>
-    <label class="block text-xs text-gray-500 mb-1">Empresa</label>
-    <select name="empresa" class="w-full border rounded px-2 py-1 text-sm">
-      <option value="">Todas</option>
-      {% for e in empresas %}
-        <option value="{{ e.id }}" {{ 'selected' if filtros.empresa == e.id }}>{{ e.nome }}</option>
-      {% endfor %}
-    </select>
-  </div>
-  <div>
-    <label class="block text-xs text-gray-500 mb-1">Setor</label>
-    <select name="setor" class="w-full border rounded px-2 py-1 text-sm">
-      <option value="">Todos</option>
-      {% for s in setores %}
-        <option value="{{ s.id }}" {{ 'selected' if filtros.setor == s.id }}>{{ s.nome }}</option>
-      {% endfor %}
-    </select>
-  </div>
-  <div>
-    <label class="block text-xs text-gray-500 mb-1">Status</label>
-    <select name="status" class="w-full border rounded px-2 py-1 text-sm">
-      <option value="">Todos</option>
-      {% for s in status_opcoes %}
-        <option value="{{ s }}" {{ 'selected' if filtros.status == s }}>{{ STATUS_LABELS[s] }}</option>
-      {% endfor %}
-    </select>
-  </div>
-  <div class="flex gap-2">
-    <button class="bg-slate-800 text-white rounded px-4 py-1 text-sm hover:bg-slate-700">Filtrar</button>
-    <a href="{{ url_for('funcionarios.listar') }}" class="text-sm text-gray-500 py-1">Limpar</a>
-  </div>
-</form>
 
-<div class="bg-white rounded-lg shadow overflow-hidden">
-  <table class="w-full text-sm">
-    <thead>
-      <tr class="text-left text-gray-500 border-b bg-gray-50">
-        <th class="py-2 px-3">Código</th>
-        <th>Nome</th>
-        <th>Empresa</th>
-        <th>Setor</th>
-        <th>Dias disponíveis</th>
-        <th>Status</th>
-      </tr>
-    </thead>
-    <tbody>
-    {% for l in linhas %}
-      <tr class="border-b last:border-0 hover:bg-gray-50">
-        <td class="py-2 px-3 text-gray-500">{{ l.f.codigo }}</td>
-        <td><a href="{{ url_for('funcionarios.detalhe', func_id=l.f.id) }}" class="text-blue-700 hover:underline">{{ l.f.nome }}</a></td>
-        <td>{{ l.f.empresa.nome }}</td>
-        <td class="text-gray-500">{{ l.f.setor.nome if l.f.setor else '—' }}</td>
-        <td>{{ '%g'|format(l.restantes) if l.restantes else '—' }}</td>
-        <td>
-          <span class="px-2 py-0.5 rounded-full text-xs font-medium {{ STATUS_BADGE[l.status] }}">
-            {{ STATUS_LABELS[l.status] }}
-          </span>
-        </td>
-      </tr>
-    {% else %}
-      <tr><td colspan="6" class="py-6 text-center text-gray-400">Nenhum funcionário encontrado.</td></tr>
+  {# ---- filtros (GET) ---- #}
+  <form method="get" class="reveal r2 panel" style="padding:16px;display:grid;grid-template-columns:1.6fr 1fr 1fr auto;gap:12px;align-items:end">
+    <div>
+      <label class="lbl">Busca (nome / código)</label>
+      <div style="position:relative">
+        <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--ink-3)">{{ m.icon('search', 16) }}</span>
+        <input class="field" style="padding-left:34px" name="busca" value="{{ filtros.busca }}" placeholder="Ex: Maria, 1042">
+      </div>
+    </div>
+    <div>
+      <label class="lbl">Empresa</label>
+      <select class="field" name="empresa">
+        <option value="">Todas</option>
+        {% for e in empresas %}<option value="{{ e.id }}" {{ 'selected' if filtros.empresa == e.id }}>{{ e.nome }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="lbl">Setor</label>
+      <select class="field" name="setor">
+        <option value="">Todos</option>
+        {% for s in setores %}<option value="{{ s.id }}" {{ 'selected' if filtros.setor == s.id }}>{{ s.nome }}</option>{% endfor %}
+      </select>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" type="submit" style="height:42px">Filtrar</button>
+      <a class="btn btn-ghost" href="{{ url_for('funcionarios.listar') }}" style="height:42px">{{ m.icon('x', 15) }} Limpar</a>
+    </div>
+  </form>
+
+  {# ---- chips de status ---- #}
+  <div class="reveal r3" style="display:flex;gap:8px;flex-wrap:wrap">
+    <a class="chip {{ 'active' if not filtros.status }}" href="{{ url_for('funcionarios.listar', busca=filtros.busca or none, empresa=filtros.empresa or none, setor=filtros.setor or none) }}">Todos <span class="tnum">{{ total }}</span></a>
+    <a class="chip chip-status s-risk {{ 'active' if filtros.status == 'RISCO' }}" href="{{ url_for('funcionarios.listar', status='RISCO', busca=filtros.busca or none, empresa=filtros.empresa or none, setor=filtros.setor or none) }}"><span class="dot-status"></span>Em risco <span class="tnum">{{ risco_count }}</span></a>
+    {% for s in status_opcoes %}
+    <a class="chip chip-status {{ STATUS_CLASS[s] }} {{ 'active' if filtros.status == s }}" href="{{ url_for('funcionarios.listar', status=s, busca=filtros.busca or none, empresa=filtros.empresa or none, setor=filtros.setor or none) }}"><span class="dot-status"></span>{{ STATUS_LABELS[s] }} <span class="tnum">{{ chip_counts[s] }}</span></a>
     {% endfor %}
-    </tbody>
-  </table>
+  </div>
+
+  {# ---- tabela ---- #}
+  <div class="reveal r4 panel" style="overflow:hidden">
+    <div style="display:grid;grid-template-columns:minmax(0,2.2fr) 1.1fr 1fr .9fr 1.2fr auto;gap:14px;padding:13px 20px;border-bottom:1px solid var(--line);background:var(--surface-2)">
+      {% for h in ['Colaborador', 'Empresa', 'Setor', 'Dias disp.', 'Prazo', ''] %}<div class="eyebrow" style="font-size:10.5px">{{ h }}</div>{% endfor %}
+    </div>
+    {% for l in linhas %}
+    <a href="{{ url_for('funcionarios.detalhe', func_id=l.f.id) }}" class="lrow" style="display:grid;grid-template-columns:minmax(0,2.2fr) 1.1fr 1fr .9fr 1.2fr auto;gap:14px;padding:12px 20px;align-items:center;{{ 'border-top:1px solid var(--line)' if not loop.first }}">
+      <div style="display:flex;align-items:center;gap:11px;min-width:0">
+        {{ m.avatar(l.f.nome, 34, l.status) }}
+        <div style="min-width:0">
+          <div style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ l.f.nome }}</div>
+          <div class="mono" style="font-size:11px;color:var(--ink-3)">#{{ l.f.codigo }}</div>
+        </div>
+      </div>
+      <div style="font-size:13px">{{ l.f.empresa.nome.split()[0] if l.f.empresa else '—' }}</div>
+      <div style="font-size:13px;color:var(--ink-2)">{{ l.f.setor.nome if l.f.setor else '—' }}</div>
+      <div class="tnum" style="font-size:14px;font-weight:700">{{ '%g'|format(l.restantes) if l.restantes else '—' }}</div>
+      <div class="tnum" style="font-size:12.5px;color:var(--ink-2)">
+        {% if l.dias is none %}—{% elif l.dias < 0 %}<span style="color:var(--risk);font-weight:700">{{ -l.dias }}d atraso</span>{% else %}{{ l.dias }}d{% endif %}
+      </div>
+      {{ m.status_pill(l.status) }}
+    </a>
+    {% else %}
+    <div style="padding:40px;text-align:center;color:var(--ink-3)">Nenhum funcionário encontrado.</div>
+    {% endfor %}
+  </div>
+
 </div>
-<p class="text-sm text-gray-500 mt-3">{{ linhas|length }} funcionário(s).</p>
 {% endblock %}

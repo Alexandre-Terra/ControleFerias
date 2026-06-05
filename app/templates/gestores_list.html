@@ -1,69 +1,49 @@
 {% extends 'base.html' %}
+{% import '_macros.html' as m with context %}
 {% block title %}Gestores · Controle de Férias{% endblock %}
+{% block page_title %}Gestores{% endblock %}
 {% block content %}
-<div class="flex items-center justify-between mb-4">
-  <h1 class="text-xl font-semibold">Gestores</h1>
-  <a href="{{ url_for('gestores.novo') }}"
-     class="bg-amber-500 text-white rounded px-3 py-1.5 text-sm hover:bg-amber-600">
-    Novo gestor
-  </a>
-</div>
+<div style="display:grid;gap:20px">
 
-<div class="bg-white rounded-lg shadow overflow-hidden">
-  <table class="w-full text-sm">
-    <thead>
-      <tr class="text-left text-gray-500 border-b bg-gray-50">
-        <th class="py-2 px-3">Nome</th>
-        <th>Email</th>
-        <th>Papel</th>
-        <th>Status</th>
-        <th class="text-right pr-3">Ações</th>
-      </tr>
-    </thead>
-    <tbody>
+  <div class="reveal r1" style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px">
+    <div>
+      <div class="eyebrow" style="margin-bottom:8px">Administração</div>
+      <h2 class="display" style="font-size:24px;letter-spacing:-.03em">Gestores</h2>
+      <div style="color:var(--ink-2);font-size:13.5px;margin-top:6px;max-width:520px">Quem tem acesso ao painel. Apenas administradores gerenciam esta lista.</div>
+    </div>
+    <a class="btn btn-accent" href="{{ url_for('gestores.novo') }}">{{ m.icon('plus', 16) }} Novo gestor</a>
+  </div>
+
+  <div class="reveal r2 panel" style="overflow:hidden">
+    <div style="display:grid;grid-template-columns:minmax(0,1.6fr) 1.6fr .8fr .8fr auto;gap:14px;padding:13px 20px;background:var(--surface-2);border-bottom:1px solid var(--line)">
+      {% for h in ['Nome', 'Email', 'Papel', 'Status', ''] %}<div class="eyebrow" style="font-size:10.5px">{{ h }}</div>{% endfor %}
+    </div>
     {% for g in gestores %}
-      <tr class="border-b last:border-0">
-        <td class="py-2 px-3">{{ g.nome }}</td>
-        <td>{{ g.email }}</td>
-        <td>
-          {% if g.is_admin %}
-            <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">admin</span>
-          {% else %}
-            <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">gestor</span>
-          {% endif %}
-        </td>
-        <td>
-          {% if g.ativo %}
-            <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">ativo</span>
-          {% else %}
-            <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">inativo</span>
-          {% endif %}
-        </td>
-        <td class="text-right pr-3">
-          <div class="inline-flex items-center gap-2">
-            <a href="{{ url_for('gestores.mudar_senha', gestor_id=g.id) }}"
-               class="text-xs text-blue-700 hover:underline">Mudar senha</a>
-            {% if g.ativo %}
-              <form action="{{ url_for('gestores.desativar', gestor_id=g.id) }}" method="post" class="inline">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button class="text-xs text-red-700 hover:underline"
-                        {% if g.id == current_user.id %}disabled title="Você não pode desativar a si mesmo"{% endif %}>
-                  Desativar
-                </button>
-              </form>
-            {% else %}
-              <form action="{{ url_for('gestores.reativar', gestor_id=g.id) }}" method="post" class="inline">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button class="text-xs text-green-700 hover:underline">Reativar</button>
-              </form>
-            {% endif %}
-          </div>
-        </td>
-      </tr>
+    <div style="display:grid;grid-template-columns:minmax(0,1.6fr) 1.6fr .8fr .8fr auto;gap:14px;padding:13px 20px;align-items:center;{{ 'border-top:1px solid var(--line)' if not loop.first }}">
+      <div style="display:flex;align-items:center;gap:11px;min-width:0">{{ m.avatar(g.nome, 32) }}<span style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ g.nome }}</span></div>
+      <div class="mono" style="font-size:12.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ g.email }}</div>
+      <div><span class="pill" style="--c: {{ '#7C5CD6' if g.is_admin else 'var(--idle)' }}"><span class="dot"></span>{{ 'admin' if g.is_admin else 'gestor' }}</span></div>
+      <div><span class="pill {{ 's-ok' if g.ativo else 's-risk' }}"><span class="dot"></span>{{ 'ativo' if g.ativo else 'inativo' }}</span></div>
+      <div style="display:flex;gap:14px;justify-content:flex-end;align-items:center">
+        <a href="{{ url_for('gestores.mudar_senha', gestor_id=g.id) }}" style="color:var(--info);font-size:13px;font-weight:600">Senha</a>
+        {% if g.ativo %}
+        <form action="{{ url_for('gestores.desativar', gestor_id=g.id) }}" method="post" style="display:inline-flex;margin:0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" {% if g.id == current_user.id %}disabled title="Você não pode desativar a si mesmo"{% endif %}
+            style="background:none;border:0;cursor:{{ 'not-allowed' if g.id == current_user.id else 'pointer' }};color:{{ 'var(--ink-3)' if g.id == current_user.id else 'var(--risk)' }};font-size:13px;font-weight:600;opacity:{{ '.5' if g.id == current_user.id else '1' }}">Desativar</button>
+        </form>
+        {% else %}
+        <form action="{{ url_for('gestores.reativar', gestor_id=g.id) }}" method="post" style="display:inline-flex;margin:0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" style="background:none;border:0;cursor:pointer;color:var(--ok);font-size:13px;font-weight:600">Reativar</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
     {% else %}
-      <tr><td colspan="5" class="py-4 text-center text-gray-400">Nenhum gestor cadastrado.</td></tr>
+    <div style="padding:40px;text-align:center;color:var(--ink-3)">Nenhum gestor cadastrado.</div>
     {% endfor %}
-    </tbody>
-  </table>
+  </div>
+
 </div>
 {% endblock %}

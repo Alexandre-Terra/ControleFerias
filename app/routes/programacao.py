@@ -92,10 +92,16 @@ def programar(func_id):
             flash("Férias programadas com sucesso.", "ok")
             return redirect(url_for("funcionarios.detalhe", func_id=func_id))
 
+    data_minima = hoje + timedelta(days=AVISO_PREVIO_DIAS)
+    if not form.is_submitted():
+        form.data_inicio.data = data_minima
+        form.dias_gozo.data = 30
+
     return render_template(
         "programar.html",
         f=f,
         form=form,
         elegiveis=elegiveis,
-        data_minima=(hoje + timedelta(days=AVISO_PREVIO_DIAS)),
+        data_minima=data_minima,
+        fim_previsto=data_minima + timedelta(days=29),
     )

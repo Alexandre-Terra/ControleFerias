@@ -1,24 +1,35 @@
 {% extends 'base.html' %}
+{% import '_macros.html' as m with context %}
 {% block title %}Alterar senha · {{ gestor.nome }}{% endblock %}
+{% block page_title %}Alterar senha{% endblock %}
 {% block content %}
-<a href="{{ url_for('gestores.listar') }}" class="text-sm text-blue-700 hover:underline">&larr; Voltar</a>
+<div style="max-width:600px;margin:0 auto;display:grid;gap:20px">
 
-<div class="bg-white rounded-lg shadow p-5 mt-3 max-w-lg">
-  <h1 class="text-xl font-semibold mb-1">Alterar senha</h1>
-  <p class="text-sm text-gray-500 mb-4">{{ gestor.nome }} &lt;{{ gestor.email }}&gt;</p>
+  <a class="reveal r1" href="{{ url_for('gestores.listar') }}" style="display:inline-flex;align-items:center;gap:7px;color:var(--ink-2);font-size:13px;font-weight:600;width:fit-content">{{ m.icon('arrowLeft', 16) }} Gestores</a>
 
-  <form method="post">
-    {{ form.hidden_tag() }}
+  <div class="reveal r2 panel" style="padding:0;overflow:hidden">
+    <div style="height:5px;background:var(--accent)"></div>
+    <div style="padding:26px 28px">
+      <div class="eyebrow" style="margin-bottom:9px">{{ gestor.email }}</div>
+      <h1 class="display" style="font-size:28px">Alterar senha</h1>
+      <div style="font-size:14px;color:var(--ink-2);margin-top:6px;margin-bottom:24px">{{ gestor.nome }}</div>
 
-    <label class="block text-sm font-medium mb-1">Nova senha</label>
-    {{ form.senha(class_="w-full border rounded px-3 py-2 mb-3", autofocus=true) }}
-    {% for e in form.senha.errors %}<p class="text-xs text-red-700 -mt-2 mb-2">{{ e }}</p>{% endfor %}
+      <form method="post" style="display:grid;gap:18px">
+        {{ form.hidden_tag() }}
+        <div>
+          <label class="lbl">Nova senha</label>
+          {{ form.senha(class_="field", autofocus=true) }}
+          {% for e in form.senha.errors %}<p style="color:var(--risk);font-size:12px;margin:6px 0 0">{{ e }}</p>{% endfor %}
+        </div>
+        <div>
+          <label class="lbl">Confirmar senha</label>
+          {{ form.confirmar(class_="field") }}
+          {% for e in form.confirmar.errors %}<p style="color:var(--risk);font-size:12px;margin:6px 0 0">{{ e }}</p>{% endfor %}
+        </div>
+        <button class="btn btn-primary" type="submit" style="width:fit-content;padding:11px 22px">{{ m.icon('check', 16) }} Alterar senha</button>
+      </form>
+    </div>
+  </div>
 
-    <label class="block text-sm font-medium mb-1">Confirmar senha</label>
-    {{ form.confirmar(class_="w-full border rounded px-3 py-2 mb-4") }}
-    {% for e in form.confirmar.errors %}<p class="text-xs text-red-700 -mt-2 mb-2">{{ e }}</p>{% endfor %}
-
-    {{ form.submit(class_="w-full bg-slate-800 text-white rounded py-2 hover:bg-slate-700 cursor-pointer") }}
-  </form>
 </div>
 {% endblock %}

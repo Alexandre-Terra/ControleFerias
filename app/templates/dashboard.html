@@ -1,79 +1,270 @@
 {% extends 'base.html' %}
-{% block title %}Dashboard · Controle de Férias{% endblock %}
+{% import '_macros.html' as m with context %}
+{% block title %}Painel de risco · Controle de Férias{% endblock %}
+{% block page_title %}Painel de risco{% endblock %}
 {% block content %}
-<h1 class="text-2xl font-bold mb-5">Dashboard de Férias</h1>
+{% set donut = d.donut %}
+{% set half = (donut.size / 2) %}
 
-<div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-  <div class="bg-white rounded-lg shadow p-4 border-l-4 border-red-500">
-    <div class="text-3xl font-bold text-red-600">{{ cards.vencidas }}</div>
-    <div class="text-sm text-gray-500">Férias vencidas</div>
-  </div>
-  <div class="bg-white rounded-lg shadow p-4 border-l-4 border-yellow-500">
-    <div class="text-3xl font-bold text-yellow-600">{{ cards.a_vencer }}</div>
-    <div class="text-sm text-gray-500">A vencer</div>
-  </div>
-  <div class="bg-white rounded-lg shadow p-4 border-l-4 border-green-500">
-    <div class="text-3xl font-bold text-green-600">{{ cards.tem_direito }}</div>
-    <div class="text-sm text-gray-500">Com direito a férias</div>
-  </div>
-  <div class="bg-white rounded-lg shadow p-4 border-l-4 border-blue-500">
-    <div class="text-3xl font-bold text-blue-600">{{ cards.programadas }}</div>
-    <div class="text-sm text-gray-500">Programadas</div>
-  </div>
-  <div class="bg-white rounded-lg shadow p-4 border-l-4 border-slate-500">
-    <div class="text-3xl font-bold text-slate-700">{{ cards.colaboradores }}</div>
-    <div class="text-sm text-gray-500">Colaboradores</div>
-  </div>
-</div>
+<div style="display:grid;gap:22px">
 
-<div class="grid md:grid-cols-3 gap-6">
-  <div class="bg-white rounded-lg shadow p-4">
-    <h2 class="font-semibold mb-3">Por empresa</h2>
-    <table class="w-full text-sm">
-      <thead><tr class="text-left text-gray-500 border-b">
-        <th class="py-1">Empresa</th><th>Total</th><th>Venc.</th><th>A venc.</th>
-      </tr></thead>
-      <tbody>
-      {% for nome, d in por_empresa %}
-        <tr class="border-b last:border-0">
-          <td class="py-1">{{ nome }}</td>
-          <td>{{ d.total }}</td>
-          <td class="text-red-600">{{ d.vencidas }}</td>
-          <td class="text-yellow-600">{{ d.a_vencer }}</td>
-        </tr>
+  {# ============================ HERO ============================ #}
+  <div class="reveal r1" style="display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:22px">
+    <div class="panel" style="padding:0;overflow:hidden;display:flex;flex-direction:column">
+      <div style="height:5px;background:linear-gradient(90deg, var(--risk), var(--warn))"></div>
+      <div style="padding:26px 28px 24px;display:flex;flex-direction:column;gap:22px;flex:1">
+        <div>
+          <div class="eyebrow">Painel de risco · {{ hoje.strftime('%d/%m/%Y') }}</div>
+          <h1 style="margin-top:12px;font-size:27px;line-height:1.08;letter-spacing:-.02em;max-width:440px">
+            <span class="display">{{ d.total_atencao }} colaboradores</span>
+            <span class="serif-it" style="font-size:30px;color:var(--accent-2)">exigem atenção</span>
+            <span class="display">agora.</span>
+          </h1>
+        </div>
+        <div style="display:flex;gap:8px;align-items:stretch;margin-top:6px">
+          <div class="s-risk" style="flex:1;min-width:0">
+            <div class="eyebrow" style="color:var(--c);margin-bottom:10px">Férias vencidas</div>
+            <span class="countup display tnum" data-to="{{ d.counts.VENCIDA }}" style="font-size:76px;color:var(--c);line-height:.8">{{ d.counts.VENCIDA }}</span>
+          </div>
+          <div style="width:1px;background:var(--line);margin:4px 8px"></div>
+          <div class="s-warn" style="flex:1;min-width:0">
+            <div class="eyebrow" style="color:var(--c);margin-bottom:10px">A vencer · ≤{{ d.dav }}d</div>
+            <span class="countup display tnum" data-to="{{ d.counts.A_VENCER }}" style="font-size:76px;color:var(--c);line-height:.8">{{ d.counts.A_VENCER }}</span>
+          </div>
+        </div>
+        <div style="margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap">
+          <div style="font-size:13px;color:var(--ink-2);max-width:360px">
+            Vencidas geram risco de <strong style="color:var(--ink)">pagamento em dobro</strong>. Priorize quem está há mais tempo em atraso.
+          </div>
+          <a class="btn btn-primary" href="{{ url_for('funcionarios.listar', status='RISCO') }}">Ver lista de risco {{ m.icon('arrowUpRight', 16) }}</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="padding:22px 24px;display:flex;flex-direction:column">
+      <div class="eyebrow" style="margin-bottom:16px">Distribuição</div>
+      <div style="flex:1;display:grid;place-items:center">
+        <div style="display:flex;gap:22px;align-items:center;flex-wrap:wrap">
+          <svg width="{{ donut.size }}" height="{{ donut.size }}" style="flex:0 0 auto">
+            <circle cx="{{ half }}" cy="{{ half }}" r="{{ donut.r }}" fill="none" stroke="var(--line)" stroke-width="14"></circle>
+            {% for seg in donut.segments %}
+            <circle class="donut-seg" cx="{{ half }}" cy="{{ half }}" r="{{ donut.r }}" fill="none"
+              stroke="var(--{{ seg.var }})" stroke-width="14" stroke-linecap="butt"
+              stroke-dasharray="{{ seg.len | round(2) }} {{ seg.c | round(2) }}" stroke-dashoffset="-{{ seg.off | round(2) }}"
+              transform="rotate(-90 {{ half }} {{ half }})"
+              data-len="{{ seg.len | round(2) }}" data-c="{{ seg.c | round(2) }}"></circle>
+            {% endfor %}
+            <text x="{{ half }}" y="{{ half - 4 }}" text-anchor="middle" class="display tnum" style="font-size:38px;fill:var(--ink)">{{ d.total }}</text>
+            <text x="{{ half }}" y="{{ half + 18 }}" text-anchor="middle" style="font-size:11px;fill:var(--ink-3);font-family:'Space Mono',monospace;letter-spacing:.12em">COLABS</text>
+          </svg>
+          <div style="display:grid;gap:9px;min-width:168px">
+            {% for seg in donut.segments %}
+            <div style="display:flex;align-items:center;gap:9px;font-size:13px">
+              {{ m.status_dot(seg.status) }}
+              <span style="color:var(--ink-2);white-space:nowrap">{{ STATUS_LABELS[seg.status] }}</span>
+              <span class="tnum" style="margin-left:auto;font-weight:700">{{ seg.n }}</span>
+            </div>
+            {% else %}
+            <div style="color:var(--ink-3);font-size:13px">Sem colaboradores cadastrados.</div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ======================== SECONDARY KPIS ======================== #}
+  <div class="reveal r2" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
+    {% for skey, slabel, sic in [('TEM_DIREITO','Com direito','checkCircle'), ('PROGRAMADA','Programadas','calendar'), ('EM_FORMACAO','Em formação','hourglass')] %}
+    <div class="panel {{ STATUS_CLASS[skey] }}" style="padding:16px 18px;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <span class="eyebrow">{{ slabel }}</span>
+        <span style="color:var(--c)">{{ m.icon(sic, 16) }}</span>
+      </div>
+      <div style="display:flex;align-items:baseline;gap:8px">
+        <span class="countup display tnum" data-to="{{ d.counts[skey] }}" style="font-size:40px;color:var(--ink)">{{ d.counts[skey] }}</span>
+        <span class="dot-status" style="background:var(--c)"></span>
+      </div>
+    </div>
+    {% endfor %}
+    <div class="panel" style="padding:16px 18px;display:flex;flex-direction:column;gap:10px;background:var(--ink);color:var(--paper);border-color:var(--ink)">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <span class="eyebrow" style="color:color-mix(in srgb, var(--paper) 60%, transparent)">Total</span>
+        <span style="color:var(--accent)">{{ m.icon('users', 16) }}</span>
+      </div>
+      <div style="display:flex;align-items:baseline;gap:8px">
+        <span class="countup display tnum" data-to="{{ d.total }}" style="font-size:40px">{{ d.total }}</span>
+        <span style="font-size:12px;opacity:.7">colaboradores · {{ d.empresas }} empresa{{ 's' if d.empresas != 1 }}</span>
+      </div>
+    </div>
+  </div>
+
+  {# ========================== TIMELINE ========================== #}
+  <div class="reveal r3 panel" style="padding:24px 26px">
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:16px">
+      <div>
+        <div class="eyebrow" style="margin-bottom:8px">Calendário de férias</div>
+        <h2 class="display" style="font-size:24px;letter-spacing:-.03em">Quem está fora, e quando</h2>
+        <div style="color:var(--ink-2);font-size:13.5px;margin-top:6px;max-width:520px">Férias programadas nos próximos meses. A linha âmbar marca hoje.</div>
+      </div>
+      <div class="pill s-info" style="cursor:default"><span class="dot"></span>{{ d.timeline.rows | length }} programações</div>
+    </div>
+    {% set tl = d.timeline %}
+    {% set LBL = 186 %}
+    <div style="overflow:hidden">
+      <div style="display:flex;padding-left:{{ LBL }}px">
+        <div style="position:relative;flex:1;height:22px">
+          {% for mo in tl.meses %}
+          <div style="position:absolute;left:{{ mo.left | round(2) }}%;top:0;font-size:11px;letter-spacing:.14em;color:var(--ink-3);font-family:'Space Mono',monospace;border-left:1px solid var(--line);padding-left:7px;height:22px">{{ mo.label }}</div>
+          {% endfor %}
+        </div>
+      </div>
+      {% if tl.rows %}
+      <div style="position:relative">
+        <div style="position:absolute;left:{{ LBL }}px;right:0;top:0;bottom:0;pointer-events:none">
+          <div style="position:absolute;left:{{ tl.hoje_pct | round(2) }}%;top:-4px;bottom:6px;width:2px;background:var(--accent);opacity:.85">
+            <span style="position:absolute;top:-16px;left:-16px;font-size:10px;font-family:'Space Mono',monospace;color:var(--on-accent);background:var(--accent);padding:1px 6px;border-radius:6px;letter-spacing:.1em">HOJE</span>
+          </div>
+          {% for mo in tl.meses %}
+          <div style="position:absolute;left:{{ mo.left | round(2) }}%;top:0;bottom:0;width:1px;background:var(--line)"></div>
+          {% endfor %}
+        </div>
+        {% for row in tl.rows[:16] %}
+        <div style="display:flex;align-items:center;height:42px;{{ 'border-top:1px solid var(--line)' if not loop.first }}">
+          <div style="width:{{ LBL }}px;flex:0 0 auto;display:flex;align-items:center;gap:9px;padding-right:12px;min-width:0">
+            {{ m.avatar(row.nome, 26) }}
+            <div style="min-width:0">
+              <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ row.nome }}</div>
+              <div style="font-size:10.5px;color:var(--ink-3);font-family:'Space Mono',monospace">{{ row.empresa }}</div>
+            </div>
+          </div>
+          <div style="position:relative;flex:1;height:100%">
+            <div class="s-info" title="{{ row.inicio.strftime('%d/%m/%Y') }} – {{ row.fim.strftime('%d/%m/%Y') }} · {{ row.dias }} dias"
+              style="position:absolute;left:{{ row.left | round(2) }}%;width:{{ row.width | round(2) }}%;top:50%;transform:translateY(-50%);height:22px;border-radius:7px;background:color-mix(in srgb, var(--c) 88%, var(--surface));border:1px solid color-mix(in srgb, var(--c) 60%, transparent);display:flex;align-items:center;padding-left:8px;overflow:hidden">
+              <span class="tnum" style="font-size:11px;font-weight:700;color:var(--on-accent);white-space:nowrap">{{ row.dias }}d</span>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% if tl.rows | length > 16 %}
+      <div style="margin-top:12px;font-size:12.5px;color:var(--ink-3)">+ {{ tl.rows | length - 16 }} outras programações no período.</div>
+      {% endif %}
+      {% else %}
+      <div style="padding:28px 0;text-align:center;color:var(--ink-3);font-size:13.5px">Nenhuma programação de férias no período.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ===================== HEATMAP + TREND/DEADLINES ===================== #}
+  <div class="reveal r4" style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:22px">
+    <div class="panel" style="padding:24px 26px">
+      <div style="margin-bottom:16px">
+        <div class="eyebrow" style="margin-bottom:8px">Mapa de prazos</div>
+        <h2 class="display" style="font-size:24px;letter-spacing:-.03em">Onde o risco se concentra</h2>
+        <div style="color:var(--ink-2);font-size:13.5px;margin-top:6px;max-width:520px">Prazos de gozo por empresa e mês. Coluna “atraso” = já vencidos.</div>
+      </div>
+      {% set hm = d.heatmap %}
+      {% if hm.rows %}
+      {% set coltmpl = '132px 64px repeat(' ~ (hm.meses | length) ~ ', 1fr)' %}
+      <div style="display:grid;gap:7px">
+        <div style="display:grid;grid-template-columns:{{ coltmpl }};gap:7px;align-items:center">
+          <div></div>
+          <div style="text-align:center;font-size:10px;color:var(--risk);font-family:'Space Mono',monospace;letter-spacing:.06em">ATRASO</div>
+          {% for mo in hm.meses %}<div style="text-align:center;font-size:10px;color:var(--ink-3);font-family:'Space Mono',monospace;letter-spacing:.06em">{{ mo.label }}</div>{% endfor %}
+        </div>
+        {% for row in hm.rows %}
+        <div style="display:grid;grid-template-columns:{{ coltmpl }};gap:7px;align-items:center">
+          <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ row.empresa }}</div>
+          {% for tile in [row.overdue] + row.months %}
+            {% set cvar = 'var(--risk)' if tile.overdue else 'var(--warn)' %}
+            {% if tile.empty %}
+            <div class="heat-empty tnum" style="aspect-ratio:1.5/1;border-radius:8px;display:grid;place-items:center;font-weight:800;font-size:15px">·</div>
+            {% else %}
+            <div class="tnum" style="aspect-ratio:1.5/1;border-radius:8px;display:grid;place-items:center;font-weight:800;font-size:15px;background:color-mix(in srgb, {{ cvar }} {{ tile.pct }}%, var(--surface));border:1px solid color-mix(in srgb, {{ cvar }} 40%, transparent);color:{{ '#fff' if tile.strong else cvar }}">{{ tile.n }}</div>
+            {% endif %}
+          {% endfor %}
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div style="padding:28px 0;text-align:center;color:var(--ink-3);font-size:13.5px">Sem prazos de gozo a exibir.</div>
+      {% endif %}
+    </div>
+
+    <div style="display:grid;gap:22px;grid-template-rows:auto 1fr">
+      <div class="panel" style="padding:22px 24px">
+        <div class="eyebrow" style="margin-bottom:4px">Programadas por mês</div>
+        <div style="display:flex;align-items:flex-end;gap:10px;height:132px">
+          {% for bar in d.trend %}
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;height:100%;justify-content:flex-end">
+            <span class="tnum" style="font-size:13px;font-weight:700;color:{{ 'var(--ink)' if bar.n else 'var(--ink-3)' }}">{{ bar.n }}</span>
+            <div class="grow-h" style="width:100%;max-width:30px;height:{{ bar.h }}px;border-radius:6px;background:{{ 'var(--accent)' if bar.n else 'var(--line)' }}"></div>
+            <span style="font-size:10px;color:var(--ink-3);font-family:'Space Mono',monospace;letter-spacing:.08em">{{ bar.label }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="panel" style="padding:20px 24px">
+        <div class="eyebrow" style="margin-bottom:14px">Próximos prazos de gozo</div>
+        <div style="display:grid;gap:12px">
+          {% for p in d.proximos %}
+          <a href="{{ url_for('funcionarios.detalhe', func_id=p.f_id) }}" style="display:flex;align-items:center;gap:11px;text-align:left">
+            {{ m.avatar(p.nome, 30, p.status) }}
+            <div style="min-width:0;flex:1">
+              <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.nome }}</div>
+              <div style="font-size:11px;color:var(--ink-3)">{{ p.empresa }}</div>
+            </div>
+            <div style="text-align:right">
+              <div class="tnum" style="font-size:13px;font-weight:700">{{ p.data.strftime('%d/%m') }}</div>
+              <div class="mono" style="font-size:10.5px;color:{{ 'var(--warn)' if p.dias <= 30 else 'var(--ink-3)' }}">{{ p.dias }}d</div>
+            </div>
+          </a>
+          {% else %}
+          <div style="color:var(--ink-3);font-size:13px">Nenhum prazo próximo.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ============================ RISK LIST ============================ #}
+  <div class="reveal r5 panel" style="padding:24px 26px">
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:16px">
+      <div>
+        <div class="eyebrow" style="margin-bottom:8px">Ação imediata</div>
+        <h2 class="display" style="font-size:24px;letter-spacing:-.03em">Lista de risco priorizada</h2>
+        <div style="color:var(--ink-2);font-size:13.5px;margin-top:6px;max-width:520px">Ordenado por urgência — quem está há mais tempo em atraso aparece primeiro.</div>
+      </div>
+      <a class="btn btn-ghost btn-sm" href="{{ url_for('funcionarios.listar', status='RISCO') }}">Abrir em Funcionários {{ m.icon('arrowUpRight', 15) }}</a>
+    </div>
+    <div style="display:grid;gap:2px">
+      {% for r in d.risco[:8] %}
+      <div style="display:grid;grid-template-columns:26px minmax(0,2.4fr) minmax(0,1.3fr) auto auto;align-items:center;gap:14px;padding:12px 8px;{{ 'border-top:1px solid var(--line)' if not loop.first }}">
+        <span class="mono tnum" style="font-size:12px;color:var(--ink-3)">{{ '%02d'|format(loop.index) }}</span>
+        <div style="display:flex;align-items:center;gap:11px;min-width:0">
+          {{ m.avatar(r.nome, 34) }}
+          <div style="min-width:0">
+            <div style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.nome }}</div>
+            <div class="mono" style="font-size:11px;color:var(--ink-3)">#{{ r.codigo }} · {{ r.empresa }} · {{ r.setor }}</div>
+          </div>
+        </div>
+        <div class="{{ STATUS_CLASS[r.status] }}" style="font-size:13px">
+          <span class="tnum" style="font-weight:700;color:var(--c)">
+            {% if r.dias is not none and r.dias < 0 %}{{ -r.dias }} dias em atraso{% elif r.dias is not none %}faltam {{ r.dias }} dias{% else %}—{% endif %}
+          </span>
+        </div>
+        {{ m.status_pill(r.status) }}
+        <a class="btn btn-accent btn-sm" href="{{ url_for('programacao.programar', func_id=r.f_id) }}">Programar</a>
+      </div>
+      {% else %}
+      <div style="padding:24px 0;text-align:center;color:var(--ink-3);font-size:13.5px">Nenhum colaborador em risco. 🎉</div>
       {% endfor %}
-      </tbody>
-    </table>
+    </div>
+    {% if d.risco | length > 8 %}
+    <div style="margin-top:12px;font-size:12.5px;color:var(--ink-3)">+ {{ d.risco | length - 8 }} outros em risco — veja a lista completa.</div>
+    {% endif %}
   </div>
 
-  <div class="bg-white rounded-lg shadow p-4">
-    <h2 class="font-semibold mb-3">Por setor</h2>
-    <table class="w-full text-sm">
-      <thead><tr class="text-left text-gray-500 border-b"><th class="py-1">Setor</th><th>Qtd</th></tr></thead>
-      <tbody>
-      {% for nome, qtd in por_setor %}
-        <tr class="border-b last:border-0"><td class="py-1">{{ nome }}</td><td>{{ qtd }}</td></tr>
-      {% endfor %}
-      </tbody>
-    </table>
-    <p class="text-xs text-gray-400 mt-2">Defina o setor de cada funcionário na tela de detalhe.</p>
-  </div>
-
-  <div class="bg-white rounded-lg shadow p-4">
-    <h2 class="font-semibold mb-3">Férias programadas por mês</h2>
-    <table class="w-full text-sm">
-      <tbody>
-      {% for mes, qtd in por_mes %}
-        <tr class="border-b last:border-0">
-          <td class="py-1 w-12">{{ mes }}</td>
-          <td>
-            <div class="bg-blue-500 h-3 rounded inline-block align-middle" style="width: {{ qtd * 18 }}px"></div>
-            <span class="ml-2 text-gray-600">{{ qtd }}</span>
-          </td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </div>
 </div>
 {% endblock %}

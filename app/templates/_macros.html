@@ -1,0 +1,78 @@
+{# Macros do redesenho "Editorial Risk". Importar SEMPRE `with context`
+   (precisam de ICONS, STATUS_*, current_user, iniciais, avatar_cor). #}
+
+{% macro icon(name, size=18, sw=1.75, cls='', style='') -%}
+<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none"
+     stroke="currentColor" stroke-width="{{ sw }}" stroke-linecap="round" stroke-linejoin="round"
+     class="{{ cls }}" style="flex:0 0 auto;display:block;{{ style }}">{{ ICONS.get(name, '') | safe }}</svg>
+{%- endmacro %}
+
+{% macro status_pill(status, size='') -%}
+<span class="pill {{ STATUS_CLASS[status] }}"{% if size == 'lg' %} style="font-size:13px;padding:6px 12px 6px 10px"{% endif %}><span class="dot"></span>{{ STATUS_LABELS[status] }}</span>
+{%- endmacro %}
+
+{% macro status_dot(status) -%}
+<span class="dot-status {{ STATUS_CLASS[status] }}"></span>
+{%- endmacro %}
+
+{% macro avatar(nome, size=36, status=None) -%}
+{% set cor = avatar_cor(nome) -%}
+<span style="position:relative;display:inline-flex;flex:0 0 auto">
+  <span style="width:{{ size }}px;height:{{ size }}px;border-radius:999px;display:grid;place-items:center;background:color-mix(in srgb, {{ cor }} 16%, var(--surface));color:{{ cor }};font-weight:700;font-size:{{ (size * 0.36) | round(1) }}px;border:1px solid color-mix(in srgb, {{ cor }} 28%, transparent)">{{ iniciais(nome) }}</span>
+  {%- if status %}<span class="dot-status {{ STATUS_CLASS[status] }}" style="position:absolute;right:-1px;bottom:-1px;width:11px;height:11px;box-shadow:0 0 0 2.5px var(--surface)"></span>{% endif %}
+</span>
+{%- endmacro %}
+
+{% macro brand(compact=False) -%}
+<a href="{{ url_for('dashboard.index') }}" style="display:inline-flex;align-items:center;gap:11px">
+  <span style="width:38px;height:38px;border-radius:11px;background:var(--ink);color:var(--accent);display:grid;place-items:center;flex:0 0 auto">{{ icon('umbrella', 21, 2) }}</span>
+  {%- if not compact %}
+  <span style="line-height:1">
+    <span style="display:block;font-weight:800;font-size:15px;letter-spacing:-.02em">Controle</span>
+    <span class="serif-it" style="display:block;font-size:16px;margin-top:1px;color:var(--accent-2)">de Férias</span>
+  </span>
+  {% endif %}
+</a>
+{%- endmacro %}
+
+{% macro theme_layout_controls(compact=False) -%}
+<div style="display:flex;gap:10px;align-items:center">
+  {%- if not compact %}
+  <div class="seg" role="group" aria-label="Layout">
+    <button class="seg-btn" type="button" data-set-layout="sidebar" title="Layout com barra lateral">{{ icon('panelLeft', 15) }}</button>
+    <button class="seg-btn" type="button" data-set-layout="topnav" title="Layout com barra no topo">{{ icon('panelTop', 15) }}</button>
+  </div>
+  {% endif %}
+  <button class="btn btn-ghost btn-sm" type="button" data-toggle-theme title="Alternar tema">
+    <span class="ic-light" style="display:inline-flex">{{ icon('moon', 15) }}</span>
+    <span class="ic-dark" style="display:inline-flex">{{ icon('sun', 15) }}</span>
+  </button>
+</div>
+{%- endmacro %}
+
+{% macro nav_items(variant) -%}
+  {% set bp = request.blueprint -%}
+  {% set items = [
+    ('dashboard.index', 'Painel', 'grid', bp == 'dashboard', false),
+    ('funcionarios.listar', 'Funcionários', 'users', bp in ['funcionarios', 'programacao'], false),
+    ('gestores.listar', 'Gestores', 'shield', bp == 'gestores', true)
+  ] -%}
+  {% for endpoint, label, ic, active, admin_only in items -%}
+    {% if not admin_only or (current_user and current_user.is_admin) -%}
+    <a href="{{ url_for(endpoint) }}" class="nav-item{{ ' nav-top' if variant == 'top' }}{{ ' active' if active }}">{{ icon(ic, 18 if variant == 'side' else 17, 2 if active else 1.75) }} {{ label }}</a>
+    {%- endif %}
+  {%- endfor %}
+{%- endmacro %}
+
+{% macro user_menu(user) -%}
+<div style="display:flex;align-items:center;gap:10px">
+  <div style="text-align:right;line-height:1.2">
+    <div style="font-size:13px;font-weight:600">{{ user.nome }}</div>
+    <div class="mono" style="font-size:10.5px;color:var(--ink-3)">{{ 'ADMIN' if user.is_admin else 'GESTOR' }}</div>
+  </div>
+  {{ avatar(user.nome, 34) }}
+  <form action="{{ url_for('auth.logout') }}" method="post" style="display:inline-flex">
+    <button class="btn btn-ghost btn-sm" type="submit" title="Sair">{{ icon('logout', 15) }}</button>
+  </form>
+</div>
+{%- endmacro %}
