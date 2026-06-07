@@ -72,6 +72,7 @@
     <div class="mono" style="font-size:10.5px;color:var(--ink-3)">{{ 'ADMIN' if user.is_admin else ('GESTOR · ' ~ user.setor.nome if user.setor else 'GESTOR') }}</div>
   </div>
   {{ avatar(user.nome, 34) }}
+  <a class="btn btn-ghost btn-sm" href="{{ url_for('configuracoes.index') }}" title="Configurações">{{ icon('settings', 15) }}</a>
   <form action="{{ url_for('auth.logout') }}" method="post" style="display:inline-flex">
     <button class="btn btn-ghost btn-sm" type="submit" title="Sair">{{ icon('logout', 15) }}</button>
   </form>

@@ -21,10 +21,18 @@ def create_app(config_class=Config):
     csrf.init_app(app)
 
     from . import auth, cli
-    from .routes import dashboard, funcionarios, gestores, programacao, setores
+    from .routes import (
+        configuracoes,
+        dashboard,
+        funcionarios,
+        gestores,
+        programacao,
+        setores,
+    )
 
     app.register_blueprint(auth.bp)
     app.register_blueprint(cli.bp)
+    app.register_blueprint(configuracoes.bp)
     app.register_blueprint(dashboard.bp)
     app.register_blueprint(funcionarios.bp)
     app.register_blueprint(gestores.bp)

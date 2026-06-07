@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% import '_macros.html' as m with context %}
+{% block title %}Alterar senha · Configurações{% endblock %}
+{% block page_title %}Alterar senha{% endblock %}
+{% block content %}
+<div style="max-width:600px;margin:0 auto;display:grid;gap:20px">
+
+  <a class="reveal r1" href="{{ url_for('configuracoes.index') }}" style="display:inline-flex;align-items:center;gap:7px;color:var(--ink-2);font-size:13px;font-weight:600;width:fit-content">{{ m.icon('arrowLeft', 16) }} Configurações</a>
+
+  <div class="reveal r2 panel" style="padding:0;overflow:hidden">
+    <div style="height:5px;background:var(--accent)"></div>
+    <div style="padding:26px 28px">
+      <div class="eyebrow" style="margin-bottom:9px">{{ current_user.email }}</div>
+      <h1 class="display" style="font-size:28px">Alterar senha</h1>
+      <div style="font-size:14px;color:var(--ink-2);margin-top:6px;margin-bottom:24px">Confirme a senha atual para definir uma nova.</div>
+
+      <form method="post" style="display:grid;gap:18px">
+        {{ form.hidden_tag() }}
+        <div>
+          <label class="lbl">Senha atual</label>
+          {{ form.senha_atual(class_="field", autofocus=true) }}
+          {% for e in form.senha_atual.errors %}<p style="color:var(--risk);font-size:12px;margin:6px 0 0">{{ e }}</p>{% endfor %}
+        </div>
+        <div>
+          <label class="lbl">Nova senha</label>
+          {{ form.senha(class_="field") }}
+          {% for e in form.senha.errors %}<p style="color:var(--risk);font-size:12px;margin:6px 0 0">{{ e }}</p>{% endfor %}
+        </div>
+        <div>
+          <label class="lbl">Confirmar nova senha</label>
+          {{ form.confirmar(class_="field") }}
+          {% for e in form.confirmar.errors %}<p style="color:var(--risk);font-size:12px;margin:6px 0 0">{{ e }}</p>{% endfor %}
+        </div>
+        <button class="btn btn-primary" type="submit" style="width:fit-content;padding:11px 22px">{{ m.icon('check', 16) }} Alterar senha</button>
+      </form>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

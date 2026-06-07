@@ -84,3 +84,20 @@ class MudarSenhaForm(FlaskForm):
         validators=[DataRequired(), EqualTo("senha", message="As senhas não conferem.")],
     )
     submit = SubmitField("Alterar senha")
+
+
+class AlterarSenhaForm(FlaskForm):
+    """Self-service: gestor troca a própria senha (exige a senha atual).
+
+    A senha atual não vira validator — é conferida na rota com
+    ``check_password_hash`` (precisa do hash do gestor logado).
+    """
+    senha_atual = PasswordField("Senha atual", validators=[DataRequired()])
+    senha = PasswordField(
+        "Nova senha", validators=[DataRequired(), Length(min=6)]
+    )
+    confirmar = PasswordField(
+        "Confirmar nova senha",
+        validators=[DataRequired(), EqualTo("senha", message="As senhas não conferem.")],
+    )
+    submit = SubmitField("Alterar senha")
