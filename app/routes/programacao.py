@@ -111,3 +111,43 @@ def programar(func_id):
         data_minima=data_minima,
         fim_previsto=data_minima + timedelta(days=29),
     )
+
+
+@bp.route("/<int:func_id>/programacoes/<int:prog_id>/cancelar", methods=["POST"])
+@login_required
+def cancelar(func_id, prog_id):
+    hoje = date.today()
+    f = db.get_or_404(Funcionario, func_id)
+    if not current_user().pode_gerir(f):
+        abort(403)
+    prog = db.get_or_404(ProgramacaoFerias, prog_id)
+    if prog.funcionario_id != f.id:
+        abort(404)
+
+    fim = prog.data_fim or prog.data_inicio
+    if fim < hoje:
+        flash(
+            "Programação já encerrada — férias gozadas não podem ser canceladas.",
+            "erro",
+        )
+        return redirect(url_for("funcionarios.detalhe", func_id=func_id))
+
+    # Captura antes do delete: o commit expira a instância.
+    data_inicio = prog.data_inicio
+
+    # Devolve o saldo consumido na criação (manual) ou deduzido pela
+    # fórmula da planilha (import). Período é nullable.
+    restaurado = False
+    if prog.periodo is not None:
+        prog.periodo.dias_restantes = (
+            prog.periodo.dias_restantes or 0
+        ) + prog.dias_gozo
+        restaurado = True
+
+    db.session.delete(prog)
+    db.session.commit()
+    msg = f"Programação de {data_inicio:%d/%m/%Y} cancelada."
+    if restaurado:
+        msg += " Saldo do período restaurado."
+    flash(msg, "ok")
+    return redirect(url_for("funcionarios.detalhe", func_id=func_id))

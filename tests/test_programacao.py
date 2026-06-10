@@ -75,3 +75,111 @@ def test_aviso_previo_30_dias(app, client_gestor, gestor_comum):
     )
     assert "antecedência" in r.get_data(as_text=True)
     assert db.session.get(PeriodoAquisitivo, p.id).dias_restantes == 16  # inalterado
+
+
+def _programacao(f, p, inicio, dias, origem="manual", criado_por_id=None):
+    prog = ProgramacaoFerias(
+        funcionario_id=f.id,
+        periodo_aquisitivo_id=p.id if p else None,
+        data_inicio=inicio,
+        dias_gozo=dias,
+        data_fim=inicio + timedelta(days=dias - 1),
+        origem=origem,
+        criado_por_id=criado_por_id,
+    )
+    db.session.add(prog)
+    db.session.commit()
+    return prog
+
+
+def test_cancelar_restaura_saldo_e_remove(app, client_gestor, gestor_comum):
+    # Saldo 6 = 16 originais já consumidos pela programação de 10 dias.
+    f, p = _setup_funcionario(saldo=6, setor_id=gestor_comum.setor_id)
+    prog = _programacao(
+        f, p, date.today() + timedelta(days=45), 10,
+        criado_por_id=gestor_comum.id,
+    )
+    pid = prog.id
+
+    r = client_gestor.post(
+        f"/funcionarios/{f.id}/programacoes/{pid}/cancelar",
+        follow_redirects=True,
+    )
+    assert "cancelada" in r.get_data(as_text=True)
+    assert db.session.get(PeriodoAquisitivo, p.id).dias_restantes == 16
+    assert db.session.get(ProgramacaoFerias, pid) is None
+
+
+def test_cancelar_import_em_curso_sem_criador(app, client_gestor, gestor_comum):
+    # Espelha o caso real: prog importada em curso, saldo zerado pela planilha.
+    f, p = _setup_funcionario(saldo=0, setor_id=gestor_comum.setor_id)
+    prog = _programacao(
+        f, p, date.today() - timedelta(days=9), 30, origem="import"
+    )
+    pid = prog.id
+
+    r = client_gestor.post(
+        f"/funcionarios/{f.id}/programacoes/{pid}/cancelar",
+        follow_redirects=True,
+    )
+    assert "Saldo do período restaurado" in r.get_data(as_text=True)
+    assert db.session.get(PeriodoAquisitivo, p.id).dias_restantes == 30
+    assert db.session.get(ProgramacaoFerias, pid) is None
+
+
+def test_cancelar_403_fora_do_escopo(app, client_gestor, gestor_comum):
+    f, p = _setup_funcionario(saldo=6, setor_id=None)  # fora do setor do gestor
+    prog = _programacao(f, p, date.today() + timedelta(days=45), 10)
+
+    r = client_gestor.post(
+        f"/funcionarios/{f.id}/programacoes/{prog.id}/cancelar"
+    )
+    assert r.status_code == 403
+    assert db.session.get(ProgramacaoFerias, prog.id) is not None
+
+
+def test_cancelar_404_prog_de_outro_funcionario(app, client_gestor, gestor_comum):
+    f, p = _setup_funcionario(saldo=6, setor_id=gestor_comum.setor_id)
+    f2 = Funcionario(
+        empresa_id=f.empresa_id, setor_id=gestor_comum.setor_id,
+        codigo="2", nome="BELTRANO DE TAL",
+    )
+    db.session.add(f2)
+    db.session.commit()
+    prog2 = _programacao(f2, None, date.today() + timedelta(days=45), 10)
+
+    r = client_gestor.post(
+        f"/funcionarios/{f.id}/programacoes/{prog2.id}/cancelar"
+    )
+    assert r.status_code == 404
+    assert db.session.get(ProgramacaoFerias, prog2.id) is not None
+    assert db.session.get(PeriodoAquisitivo, p.id).dias_restantes == 6
+
+
+def test_cancelar_passada_proibido(app, client_gestor, gestor_comum):
+    f, p = _setup_funcionario(saldo=6, setor_id=gestor_comum.setor_id)
+    prog = _programacao(f, p, date.today() - timedelta(days=40), 10)  # fim no passado
+
+    r = client_gestor.post(
+        f"/funcionarios/{f.id}/programacoes/{prog.id}/cancelar",
+        follow_redirects=True,
+    )
+    assert "já encerrada" in r.get_data(as_text=True)
+    assert db.session.get(ProgramacaoFerias, prog.id) is not None
+    assert db.session.get(PeriodoAquisitivo, p.id).dias_restantes == 6
+
+
+def test_cancelar_sem_periodo_vinculado(app, client_gestor, gestor_comum):
+    f, p = _setup_funcionario(saldo=6, setor_id=gestor_comum.setor_id)
+    prog = _programacao(f, None, date.today() + timedelta(days=45), 10)
+    pid = prog.id
+
+    r = client_gestor.post(
+        f"/funcionarios/{f.id}/programacoes/{pid}/cancelar",
+        follow_redirects=True,
+    )
+    texto = r.get_data(as_text=True)
+    assert "cancelada" in texto
+    assert "restaurado" not in texto
+    assert db.session.get(ProgramacaoFerias, pid) is None
+    assert db.session.get(PeriodoAquisitivo, p.id).dias_restantes == 6

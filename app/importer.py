@@ -191,6 +191,7 @@ def importar_xlsx(caminho, dry_run=False):
         for e in ("empresas", "funcionarios", "periodos", "programacoes")
     }
     avisos = []
+    programacoes_planilha = set()  # (funcionario_id, data_inicio) vistos na planilha
 
     def registrar(entidade, novo, antes, depois):
         if novo:
@@ -262,6 +263,7 @@ def importar_xlsx(caminho, dry_run=False):
             # Programação de férias já existente (coluna W com data).
             w_inicio = to_date(cell("w_gozo"))
             if w_inicio:
+                programacoes_planilha.add((funcionario_atual.id, w_inicio))
                 dias = to_float(cell("x_dias"))
                 dias_int = int(dias) if dias else 0
                 prog, novo_prog = _get_or_create(
@@ -279,6 +281,16 @@ def importar_xlsx(caminho, dry_run=False):
                 depois_pr = _snapshot(prog, CAMPOS_PROG)
                 registrar("programacoes", novo_prog, antes_pr, depois_pr)
                 _validar_programacao(prog, periodo, ref, avisos)
+
+    # Programações importadas que sumiram da planilha (remarcadas/canceladas
+    # na origem): o import nunca deleta — sinaliza para correção pela UI.
+    for prog in db.session.query(ProgramacaoFerias).filter_by(origem="import"):
+        if (prog.funcionario_id, prog.data_inicio) not in programacoes_planilha:
+            avisos.append(
+                f"programação origem=import sem correspondência na planilha: "
+                f"{prog.funcionario.nome} início {prog.data_inicio} — "
+                f"se for engano, cancele pela tela do funcionário"
+            )
 
     if dry_run:
         db.session.rollback()

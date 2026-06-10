@@ -10,7 +10,7 @@ from app.importer import (
     to_date,
     to_float,
 )
-from app.models import Funcionario, PeriodoAquisitivo, ProgramacaoFerias
+from app.models import Funcionario, PeriodoAquisitivo, ProgramacaoFerias, db
 
 
 def serial(d):
@@ -148,3 +148,25 @@ def test_avisos_de_divergencia(app, tmp_path):
     assert len(rel["avisos"]) == 2
     assert any("dias_restantes" in a for a in rel["avisos"])
     assert any("após o limite" in a for a in rel["avisos"])
+
+
+def test_aviso_programacao_import_orfa(app, tmp_path):
+    caminho = _planilha(tmp_path)
+    importar_xlsx(str(caminho))
+
+    # Programação import sem linha correspondente na planilha (ex.: W/X
+    # preenchidos por engano e depois corrigidos na origem).
+    f = Funcionario.query.filter_by(codigo="3").one()
+    db.session.add(ProgramacaoFerias(
+        funcionario_id=f.id,
+        data_inicio=date(2026, 6, 1),
+        dias_gozo=30,
+        data_fim=date(2026, 6, 30),
+        origem="import",
+    ))
+    db.session.commit()
+
+    rel = importar_xlsx(str(caminho), dry_run=True)
+    orfas = [a for a in rel["avisos"] if "sem correspondência" in a]
+    assert len(orfas) == 1
+    assert "2026-06-01" in orfas[0]
