@@ -1,4 +1,8 @@
-"""Programação de férias com validações da CLT (aviso de 30 dias, saldo)."""
+"""Programação de férias com validações da CLT (aviso de 30 dias, saldo).
+
+Admin é isento do aviso prévio de 30 dias — pode programar a partir de hoje
+(o passado continua bloqueado). Gestores comuns seguem a regra integral.
+"""
 from datetime import date, timedelta
 
 from flask import (
@@ -36,7 +40,8 @@ def programar(func_id):
     hoje = date.today()
     dav = current_app.config["ALERTA_A_VENCER_DIAS"]
     f = db.get_or_404(Funcionario, func_id)
-    if not current_user().pode_gerir(f):
+    gestor = current_user()
+    if not gestor.pode_gerir(f):
         abort(403)
     if not f.ativo:
         flash("Funcionário inativo — reative antes de programar férias.", "erro")
@@ -59,17 +64,25 @@ def programar(func_id):
         flash("Este funcionário não tem período com direito adquirido e saldo.", "erro")
         return redirect(url_for("funcionarios.detalhe", func_id=func_id))
 
+    # Admin é isento do aviso prévio de 30 dias (registros de última hora /
+    # acertos diretos com o colaborador); só não pode programar no passado.
+    sem_aviso = gestor.is_admin
+    data_minima = hoje if sem_aviso else hoje + timedelta(days=AVISO_PREVIO_DIAS)
+
     if form.validate_on_submit():
         periodo = db.session.get(PeriodoAquisitivo, form.periodo_id.data)
         erros = []
 
         if periodo is None or periodo.funcionario_id != f.id or periodo not in elegiveis:
             erros.append("Período inválido.")
-        if form.data_inicio.data < hoje + timedelta(days=AVISO_PREVIO_DIAS):
-            erros.append(
-                f"As férias devem ser comunicadas com {AVISO_PREVIO_DIAS} dias de "
-                f"antecedência (a partir de {(hoje + timedelta(days=AVISO_PREVIO_DIAS)):%d/%m/%Y})."
-            )
+        if form.data_inicio.data < data_minima:
+            if sem_aviso:
+                erros.append("A data de início não pode estar no passado.")
+            else:
+                erros.append(
+                    f"As férias devem ser comunicadas com {AVISO_PREVIO_DIAS} dias de "
+                    f"antecedência (a partir de {data_minima:%d/%m/%Y})."
+                )
         if periodo and form.dias_gozo.data > (periodo.dias_restantes or 0):
             erros.append(
                 f"Dias de gozo ({form.dias_gozo.data}) excedem o saldo do período "
@@ -89,7 +102,7 @@ def programar(func_id):
                     dias_gozo=dias,
                     data_fim=form.data_inicio.data + timedelta(days=dias - 1),
                     origem="manual",
-                    criado_por_id=current_user().id,
+                    criado_por_id=gestor.id,
                 )
             )
             # Consome o saldo do período para evitar dupla programação.
@@ -98,7 +111,6 @@ def programar(func_id):
             flash("Férias programadas com sucesso.", "ok")
             return redirect(url_for("funcionarios.detalhe", func_id=func_id))
 
-    data_minima = hoje + timedelta(days=AVISO_PREVIO_DIAS)
     if not form.is_submitted():
         form.data_inicio.data = data_minima
         form.dias_gozo.data = 30
@@ -110,6 +122,7 @@ def programar(func_id):
         elegiveis=elegiveis,
         data_minima=data_minima,
         fim_previsto=data_minima + timedelta(days=29),
+        sem_aviso=sem_aviso,
     )
 
 

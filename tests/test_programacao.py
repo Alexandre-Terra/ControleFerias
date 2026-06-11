@@ -77,6 +77,56 @@ def test_aviso_previo_30_dias(app, client_gestor, gestor_comum):
     assert db.session.get(PeriodoAquisitivo, p.id).dias_restantes == 16  # inalterado
 
 
+def test_admin_programa_sem_aviso_previo(app, client_admin, gestor_admin):
+    # Admin é isento do aviso de 30 dias — pode marcar começando hoje.
+    f, p = _setup_funcionario(saldo=16)
+    hoje = date.today().isoformat()
+
+    r = client_admin.post(
+        f"/funcionarios/{f.id}/programar",
+        data={"periodo_id": p.id, "data_inicio": hoje, "dias_gozo": 10},
+        follow_redirects=True,
+    )
+    assert "programadas com sucesso" in r.get_data(as_text=True)
+    assert db.session.get(PeriodoAquisitivo, p.id).dias_restantes == 6  # 16 - 10
+
+    prog = ProgramacaoFerias.query.filter_by(funcionario_id=f.id).first()
+    assert prog.criado_por_id == gestor_admin.id
+
+
+def test_admin_nao_programa_no_passado(app, client_admin, gestor_admin):
+    f, p = _setup_funcionario(saldo=16)
+    ontem = (date.today() - timedelta(days=1)).isoformat()
+
+    r = client_admin.post(
+        f"/funcionarios/{f.id}/programar",
+        data={"periodo_id": p.id, "data_inicio": ontem, "dias_gozo": 5},
+        follow_redirects=True,
+    )
+    assert "não pode estar no passado" in r.get_data(as_text=True)
+    assert db.session.get(PeriodoAquisitivo, p.id).dias_restantes == 16  # inalterado
+
+
+def test_form_admin_sem_aviso_minimo_hoje(app, client_admin, gestor_admin):
+    # GET: admin vê a caixa informativa da isenção e min do input = hoje.
+    f, p = _setup_funcionario(saldo=16)
+
+    r = client_admin.get(f"/funcionarios/{f.id}/programar")
+    html = r.get_data(as_text=True)
+    assert "sem exigência de aviso prévio" in html
+    assert f'min="{date.today().isoformat()}"' in html
+
+
+def test_form_gestor_comum_minimo_30_dias(app, client_gestor, gestor_comum):
+    # GET: gestor comum segue vendo o aviso de 30 dias e min = hoje + 30.
+    f, p = _setup_funcionario(saldo=16, setor_id=gestor_comum.setor_id)
+
+    r = client_gestor.get(f"/funcionarios/{f.id}/programar")
+    html = r.get_data(as_text=True)
+    assert "Aviso prévio de 30 dias" in html
+    assert f'min="{(date.today() + timedelta(days=30)).isoformat()}"' in html
+
+
 def _programacao(f, p, inicio, dias, origem="manual", criado_por_id=None):
     prog = ProgramacaoFerias(
         funcionario_id=f.id,

@@ -3,7 +3,8 @@
 Aplicativo web para gestores acompanharem férias de funcionários em múltiplas
 empresas. Responde de forma direta: **o funcionário já tem direito a férias?**,
 além de alertar **férias vencidas / a vencer** e permitir **programar férias**
-respeitando o aviso prévio de 30 dias.
+respeitando o aviso prévio de 30 dias (administradores são isentos do aviso e
+podem programar a partir de hoje; datas no passado ficam bloqueadas para todos).
 
 Os dados são importados da planilha `Controle_Ferias_Master_Geral.xlsx`
 (3 empresas, 80 funcionários, 113 períodos aquisitivos).

@@ -36,9 +36,13 @@
           </div>
         </div>
 
-        <div class="s-warn" style="display:flex;gap:10px;align-items:center;font-size:12.5px;color:var(--ink-2);background:color-mix(in srgb, var(--warn) 10%, var(--surface));border:1px solid color-mix(in srgb, var(--warn) 28%, transparent);padding:11px 14px;border-radius:10px">
+        <div class="{{ 's-info' if sem_aviso else 's-warn' }}" style="display:flex;gap:10px;align-items:center;font-size:12.5px;color:var(--ink-2);background:color-mix(in srgb, var(--{{ 'info' if sem_aviso else 'warn' }}) 10%, var(--surface));border:1px solid color-mix(in srgb, var(--{{ 'info' if sem_aviso else 'warn' }}) 28%, transparent);padding:11px 14px;border-radius:10px">
           <span style="color:var(--c)">{{ m.icon('flag', 16) }}</span>
+          {% if sem_aviso %}
+          <span>Administrador — sem exigência de aviso prévio de 30 dias. Início a partir de <strong style="color:var(--ink)">hoje ({{ data_minima.strftime('%d/%m/%Y') }})</strong>. Término previsto: <strong style="color:var(--ink)" id="term-prev">{{ fim_previsto.strftime('%d/%m/%Y') }}</strong>.</span>
+          {% else %}
           <span>Aviso prévio de 30 dias — início a partir de <strong style="color:var(--ink)">{{ data_minima.strftime('%d/%m/%Y') }}</strong>. Término previsto: <strong style="color:var(--ink)" id="term-prev">{{ fim_previsto.strftime('%d/%m/%Y') }}</strong>.</span>
+          {% endif %}
         </div>
 
         <button class="btn btn-accent" type="submit" style="width:fit-content;padding:11px 22px">{{ m.icon('check', 16) }} Registrar programação</button>

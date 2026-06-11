@@ -78,6 +78,8 @@ tests/            test_status.py, test_importer.py, test_programacao.py, test_au
 
 Precedência (pior caso primeiro): `VENCIDA > A_VENCER > TEM_DIREITO > PROGRAMADA > EM_FORMACAO > QUITADA`. Ver `app/status.py`.
 
+- **Aviso prévio de 30 dias** (`AVISO_PREVIO_DIAS` em `routes/programacao.py`): exigido na programação manual para gestores comuns. **Admin é isento** — pode programar a partir de hoje; datas no passado continuam bloqueadas para todos.
+
 **Invariante crítico:** o status **nunca é persistido**. É sempre recalculado a partir de `date.today()`. Não adicionar colunas de status nos modelos.
 
 ## Convenções
