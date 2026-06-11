@@ -24,14 +24,20 @@ def _banco_alvo():
     is_flag=True,
     help="Simula a importação (rollback ao final) e mostra divergências.",
 )
-def import_xlsx_command(caminho, dry_run):
+@click.option(
+    "--prune",
+    is_flag=True,
+    help="Remove programações origem=import ausentes da planilha "
+    "(só as não encerradas; manuais nunca são tocadas).",
+)
+def import_xlsx_command(caminho, dry_run, prune):
     """Importa a planilha de férias (idempotente)."""
     from seeds.setores import seed_setores
 
     if not dry_run:
         seed_setores()
 
-    rel = importar_xlsx(caminho, dry_run=dry_run)
+    rel = importar_xlsx(caminho, dry_run=dry_run, prune=prune)
 
     prefixo = "[DRY-RUN] " if dry_run else ""
     click.echo(f"{prefixo}Resultado da importação:")
@@ -42,6 +48,8 @@ def import_xlsx_command(caminho, dry_run):
             f"atualizados={c['atualizados']:4d}  "
             f"inalterados={c['inalterados']:4d}"
         )
+    if prune:
+        click.echo(f"  programações removidas = {rel['removidas']}")
 
     if rel["avisos"]:
         click.echo(f"\nDivergências ({len(rel['avisos'])}):")

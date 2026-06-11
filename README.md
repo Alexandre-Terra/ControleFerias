@@ -40,6 +40,12 @@ Acesse http://localhost:5000 e faça login com o email/senha do admin criado
 acima. Pela tela **Gestores** (visível apenas para administradores), o admin
 cria os demais gestores.
 
+O re-import é idempotente e, por padrão, **não remove** programações que
+sumiram da planilha (só avisa). Use `flask import-xlsx ... --prune` para
+remover programações de origem import ausentes da planilha (apenas as não
+encerradas; programações criadas pela UI nunca são tocadas). Combine com
+`--dry-run` para ver a lista antes.
+
 ## Testes
 
 ```powershell

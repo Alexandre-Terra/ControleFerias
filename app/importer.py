@@ -178,11 +178,14 @@ def _validar_programacao(prog, periodo, ref, avisos):
         )
 
 
-def importar_xlsx(caminho, dry_run=False):
+def importar_xlsx(caminho, dry_run=False, prune=False):
     """Importa a planilha. Retorna relatório estruturado.
 
     Quando ``dry_run=True``, dá rollback no final em vez de commit — os
     contadores e avisos refletem o que *seria* gravado.
+
+    Quando ``prune=True``, remove programações ``origem=import`` que sumiram
+    da planilha (remarcadas/canceladas na origem), desde que não encerradas.
     """
     wb = load_workbook(caminho, data_only=True, read_only=True)
 
@@ -283,13 +286,34 @@ def importar_xlsx(caminho, dry_run=False):
                 _validar_programacao(prog, periodo, ref, avisos)
 
     # Programações importadas que sumiram da planilha (remarcadas/canceladas
-    # na origem): o import nunca deleta — sinaliza para correção pela UI.
+    # na origem): por padrão o import nunca deleta — sinaliza para correção
+    # pela UI. Com ``prune=True`` remove as não encerradas; as encerradas
+    # ficam como histórico (espelha a regra da UI, que não cancela férias já
+    # gozadas). Saldo não é restaurado no prune: ``dias_restantes`` acabou de
+    # ser sobrescrito pelo AG da planilha, que é a fonte autoritativa.
+    removidas = 0
+    hoje = date.today()
     for prog in db.session.query(ProgramacaoFerias).filter_by(origem="import"):
-        if (prog.funcionario_id, prog.data_inicio) not in programacoes_planilha:
+        if (prog.funcionario_id, prog.data_inicio) in programacoes_planilha:
+            continue
+        ref_prog = f"{prog.funcionario.nome} início {prog.data_inicio}"
+        if not prune:
             avisos.append(
                 f"programação origem=import sem correspondência na planilha: "
-                f"{prog.funcionario.nome} início {prog.data_inicio} — "
-                f"se for engano, cancele pela tela do funcionário"
+                f"{ref_prog} — se for engano, cancele pela tela do "
+                f"funcionário ou rode com --prune"
+            )
+        elif (prog.data_fim or prog.data_inicio) >= hoje:
+            avisos.append(
+                f"{'seria removida' if dry_run else 'removida'} (--prune): "
+                f"{ref_prog} — ausente da planilha"
+            )
+            db.session.delete(prog)
+            removidas += 1
+        else:
+            avisos.append(
+                f"mantida apesar de ausente da planilha (--prune não remove "
+                f"encerradas): {ref_prog}"
             )
 
     if dry_run:
@@ -298,7 +322,7 @@ def importar_xlsx(caminho, dry_run=False):
         db.session.commit()
     wb.close()
 
-    return {**contadores, "avisos": avisos, "dry_run": dry_run}
+    return {**contadores, "removidas": removidas, "avisos": avisos, "dry_run": dry_run}
 
 
 def importar_setores(caminho, dry_run=False):

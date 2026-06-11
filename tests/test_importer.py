@@ -1,5 +1,5 @@
 """Testes do importador: conversões, parsing multi-linha, idempotência e dry-run."""
-from datetime import date
+from datetime import date, timedelta
 
 from openpyxl import Workbook
 
@@ -170,3 +170,70 @@ def test_aviso_programacao_import_orfa(app, tmp_path):
     orfas = [a for a in rel["avisos"] if "sem correspondência" in a]
     assert len(orfas) == 1
     assert "2026-06-01" in orfas[0]
+    assert rel["removidas"] == 0  # sem --prune, nunca remove
+
+
+def _orfa(codigo, inicio, dias, origem="import"):
+    """Programação sem correspondência na planilha, para testes de prune."""
+    f = Funcionario.query.filter_by(codigo=codigo).one()
+    prog = ProgramacaoFerias(
+        funcionario_id=f.id,
+        data_inicio=inicio,
+        dias_gozo=dias,
+        data_fim=inicio + timedelta(days=dias - 1),
+        origem=origem,
+    )
+    db.session.add(prog)
+    db.session.commit()
+    return prog
+
+
+def test_prune_remove_programacao_import_orfa(app, tmp_path):
+    caminho = _planilha(tmp_path)
+    importar_xlsx(str(caminho))
+    _orfa("3", date.today() + timedelta(days=45), 10)
+
+    rel = importar_xlsx(str(caminho), prune=True)
+
+    assert rel["removidas"] == 1
+    assert any("removida (--prune)" in a for a in rel["avisos"])
+    # A programação que está na planilha (W=01/07/2026) sobrevive.
+    assert ProgramacaoFerias.query.count() == 1
+    assert ProgramacaoFerias.query.one().data_inicio == date(2026, 7, 1)
+
+
+def test_prune_nao_remove_manual(app, tmp_path):
+    caminho = _planilha(tmp_path)
+    importar_xlsx(str(caminho))
+    _orfa("3", date.today() + timedelta(days=45), 10, origem="manual")
+
+    rel = importar_xlsx(str(caminho), prune=True)
+
+    assert rel["removidas"] == 0
+    assert ProgramacaoFerias.query.filter_by(origem="manual").count() == 1
+
+
+def test_prune_nao_remove_encerrada(app, tmp_path):
+    caminho = _planilha(tmp_path)
+    importar_xlsx(str(caminho))
+    # Férias já gozadas (fim no passado): histórico, prune não toca.
+    _orfa("3", date.today() - timedelta(days=40), 10)
+
+    rel = importar_xlsx(str(caminho), prune=True)
+
+    assert rel["removidas"] == 0
+    assert any("mantida" in a for a in rel["avisos"])
+    assert ProgramacaoFerias.query.filter_by(origem="import").count() == 2
+
+
+def test_prune_dry_run_nao_persiste(app, tmp_path):
+    caminho = _planilha(tmp_path)
+    importar_xlsx(str(caminho))
+    _orfa("3", date.today() + timedelta(days=45), 10)
+
+    rel = importar_xlsx(str(caminho), dry_run=True, prune=True)
+
+    assert rel["removidas"] == 1
+    assert any("seria removida" in a for a in rel["avisos"])
+    # Rollback do dry-run: a órfã continua no banco (além da da planilha).
+    assert ProgramacaoFerias.query.filter_by(origem="import").count() == 2
