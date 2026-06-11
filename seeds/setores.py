@@ -1,14 +1,12 @@
-"""Setores padrão (da aba DASHBOARD da planilha original)."""
+"""Setores padrão — vocabulário canônico real da coluna B das abas de empresa
+(ver SETOR_CANONICO no importer). A aba DASHBOARD da planilha é um template
+estático com setores fictícios (Financeiro, RH, Marketing) — não semear daqui."""
 from app.models import Setor, db
 
 SETORES_PADRAO = [
-    "Financeiro",
-    "RH",
     "Oficina",
     "Logística",
     "Comercial",
-    "Marketing",
-    # Vindos da coluna B das abas de empresa (ver SETOR_CANONICO no importer).
     "Administrativo",
     "Licitação",
     "Obras",
