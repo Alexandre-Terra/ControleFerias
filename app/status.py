@@ -50,11 +50,11 @@ def status_periodo(periodo, hoje, dias_a_vencer, tem_programacao_ativa=False):
     """Status de um único período aquisitivo."""
     if periodo.fim is None or periodo.fim > hoje:
         return EM_FORMACAO
+    if tem_programacao_ativa:
+        return PROGRAMADA
     restantes = periodo.dias_restantes or 0
     if restantes <= 0:
         return QUITADA
-    if tem_programacao_ativa:
-        return PROGRAMADA
     if periodo.limite_gozo and periodo.limite_gozo < hoje:
         return VENCIDA
     if periodo.limite_gozo and (periodo.limite_gozo - hoje).days <= dias_a_vencer:

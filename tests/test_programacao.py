@@ -94,6 +94,24 @@ def test_admin_programa_sem_aviso_previo(app, client_admin, gestor_admin):
     assert prog.criado_por_id == gestor_admin.id
 
 
+def test_admin_programa_saldo_total_aparece_no_filtro_programada(
+    app, client_admin
+):
+    f, p = _setup_funcionario(saldo=30)
+    hoje = date.today().isoformat()
+
+    r = client_admin.post(
+        f"/funcionarios/{f.id}/programar",
+        data={"periodo_id": p.id, "data_inicio": hoje, "dias_gozo": 30},
+        follow_redirects=True,
+    )
+    assert "programadas com sucesso" in r.get_data(as_text=True)
+    assert db.session.get(PeriodoAquisitivo, p.id).dias_restantes == 0
+
+    html = client_admin.get("/funcionarios/?status=PROGRAMADA").get_data(as_text=True)
+    assert f.nome in html
+
+
 def test_admin_nao_programa_no_passado(app, client_admin, gestor_admin):
     f, p = _setup_funcionario(saldo=16)
     ontem = (date.today() - timedelta(days=1)).isoformat()
