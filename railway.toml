@@ -5,3 +5,12 @@ builder = "railpack"
 startCommand = "flask db upgrade && flask bootstrap-admin && gunicorn 'app:create_app()' --bind 0.0.0.0:$PORT"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
+
+# --- Serviço de cron do WhatsApp (Z-API) ------------------------------------
+# O envio agendado NÃO roda no serviço web. Crie um serviço de cron SEPARADO no
+# mesmo projeto Railway (mesma imagem/repo) com:
+#   - Schedule (UTC): 0 * * * *     (de hora em hora; o comando se auto-restringe)
+#   - Start command:  flask enviar-alertas-zapi
+#   - Variáveis:      DATABASE_URL, SECRET_KEY, TZ=America/Sao_Paulo
+# NÃO rode `flask db upgrade` nesse serviço — quem migra é o web. A configuração
+# (credenciais/regras/modelos) é feita no HUD /integracoes/zapi, não em env var.

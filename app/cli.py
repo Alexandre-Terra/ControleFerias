@@ -1,5 +1,6 @@
 """Comandos de linha de comando do Flask."""
 import re
+from datetime import datetime
 
 import click
 from flask import Blueprint, current_app
@@ -17,6 +18,20 @@ def _banco_alvo():
     return re.sub(r"//([^:/@]+):[^@]+@", r"//\1:***@", uri)
 
 
+def _echo_unicode_seguro(texto):
+    """``click.echo`` resiliente à codificação do console (Windows cp1252).
+
+    Modelos de mensagem podem ter emoji; ao imprimi-los (ex.: ``--dry-run``) num
+    console que não é UTF-8, o ``click.echo`` cru levantaria ``UnicodeEncodeError``.
+    Substitui o que não couber só na impressão — o envio real à Z-API usa
+    JSON/UTF-8 e não passa por aqui.
+    """
+    import sys
+
+    enc = getattr(sys.stdout, "encoding", None) or "utf-8"
+    click.echo(texto.encode(enc, "replace").decode(enc))
+
+
 @bp.cli.command("import-xlsx")
 @click.argument("caminho")
 @click.option(
@@ -24,32 +39,28 @@ def _banco_alvo():
     is_flag=True,
     help="Simula a importação (rollback ao final) e mostra divergências.",
 )
-@click.option(
-    "--prune",
-    is_flag=True,
-    help="Remove programações origem=import ausentes da planilha "
-    "(só as não encerradas; manuais nunca são tocadas).",
-)
-def import_xlsx_command(caminho, dry_run, prune):
-    """Importa a planilha de férias (idempotente)."""
+def import_xlsx_command(caminho, dry_run):
+    """Importa a planilha (funcionários e períodos; programações nunca).
+
+    Programações de férias nascem exclusivamente no app — a planilha é
+    apenas a base de funcionários, períodos aquisitivos e saldos.
+    """
     from seeds.setores import seed_setores
 
     if not dry_run:
         seed_setores()
 
-    rel = importar_xlsx(caminho, dry_run=dry_run, prune=prune)
+    rel = importar_xlsx(caminho, dry_run=dry_run)
 
     prefixo = "[DRY-RUN] " if dry_run else ""
     click.echo(f"{prefixo}Resultado da importação:")
-    for ent in ("empresas", "funcionarios", "periodos", "programacoes"):
+    for ent in ("empresas", "funcionarios", "periodos"):
         c = rel[ent]
         click.echo(
             f"  {ent:14s} novos={c['novos']:4d}  "
             f"atualizados={c['atualizados']:4d}  "
             f"inalterados={c['inalterados']:4d}"
         )
-    if prune:
-        click.echo(f"  programações removidas = {rel['removidas']}")
 
     if rel["avisos"]:
         click.echo(f"\nDivergências ({len(rel['avisos'])}):")
@@ -222,3 +233,106 @@ def bootstrap_admin_command():
             f"bootstrap-admin: admin <{email}> sincronizado "
             "(senha redefinida, ativo, is_admin)."
         )
+
+
+@bp.cli.command("enviar-alertas-zapi")
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Ignora os gates de hora/dia útil e a trava anti-duplicação.",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Monta e imprime o resumo, sem enviar nem gravar.",
+)
+def enviar_alertas_zapi_command(force, dry_run):
+    """Envia o resumo de férias por WhatsApp (Z-API) aos números configurados.
+
+    Pensado para rodar de hora em hora por um cron: auto-restringe por
+    ``hora_envio``/dia útil e por uma trava anti-duplicação **por destinatário**,
+    disparando no máximo uma vez por dia por número. ``--force`` ignora os gates
+    (usado em testes/validação); ``--dry-run`` só imprime, sem enviar/gravar.
+
+    A configuração mora no banco (HUD do admin), não em variáveis de ambiente.
+    """
+    from . import zapi, zapi_digest
+    from .models import ConfiguracaoZapi, EnvioZapi
+
+    cfg = ConfiguracaoZapi.obter()
+    if not cfg.pronta():
+        click.echo(
+            "zapi: integração inativa ou incompleta "
+            "(sem credenciais/destinatários) — nada a fazer."
+        )
+        return
+
+    agora = datetime.now()  # hora local — depende de TZ no ambiente do cron
+    hoje = agora.date()
+
+    # --dry-run é pré-visualização: ignora os gates de hora/dia (mas não envia).
+    if not force and not dry_run:
+        if cfg.apenas_dias_uteis and hoje.weekday() >= 5:
+            click.echo("zapi: fim de semana (apenas_dias_uteis) — nada a fazer.")
+            return
+        if agora.hour < cfg.hora_envio:
+            click.echo(
+                f"zapi: antes da hora de envio ({cfg.hora_envio}h) — aguardando."
+            )
+            return
+
+    itens = zapi_digest.coletar_itens(hoje, cfg)
+    mensagem = zapi_digest.montar_mensagem(cfg, itens, hoje)
+    total = len(itens)
+
+    if mensagem is None:
+        click.echo(
+            f"zapi: sem pendências e enviar_se_vazio=off — nada a enviar "
+            f"({total} itens)."
+        )
+        return
+
+    destinatarios = cfg.destinatarios_validos()
+
+    if dry_run:
+        sep = "-" * 40
+        _echo_unicode_seguro(
+            f"[DRY-RUN] {total} item(ns). Mensagem:\n{sep}\n{mensagem}\n{sep}"
+        )
+        _echo_unicode_seguro(f"Destinatários: {', '.join(destinatarios)}")
+        return
+
+    # Anti-duplicação POR destinatário: pula quem já recebeu 'ok' agendado hoje.
+    # Resolve dedup e retry de falha parcial numa regra só. --force reenvia tudo.
+    enviados_ok = set()
+    if not force:
+        ja = EnvioZapi.query.filter_by(
+            data_referencia=hoje, tipo="agendado", status="ok"
+        ).all()
+        enviados_ok = {e.destinatario for e in ja}
+
+    enviados = falhas = pulados = 0
+    for numero in destinatarios:
+        if numero in enviados_ok:
+            pulados += 1
+            continue
+        ok, detalhe = zapi.enviar_texto(cfg, numero, mensagem)
+        db.session.add(
+            EnvioZapi(
+                data_referencia=hoje,
+                tipo="agendado",
+                destinatario=numero,
+                status="ok" if ok else "erro",
+                detalhe=detalhe,
+                total_itens=total,
+            )
+        )
+        if ok:
+            enviados += 1
+        else:
+            falhas += 1
+    db.session.commit()
+    click.echo(
+        f"zapi: {enviados} enviado(s), {falhas} falha(s), "
+        f"{pulados} já enviado(s) hoje. ({total} itens)"
+    )

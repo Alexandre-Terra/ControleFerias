@@ -26,6 +26,7 @@ def create_app(config_class=Config):
         dashboard,
         funcionarios,
         gestores,
+        integracoes,
         programacao,
         setores,
     )
@@ -36,6 +37,7 @@ def create_app(config_class=Config):
     app.register_blueprint(dashboard.bp)
     app.register_blueprint(funcionarios.bp)
     app.register_blueprint(gestores.bp)
+    app.register_blueprint(integracoes.bp)
     app.register_blueprint(programacao.bp)
     app.register_blueprint(setores.bp)
 

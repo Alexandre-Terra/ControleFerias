@@ -14,7 +14,7 @@ Dados originais vêm da planilha `Controle_Ferias_Master_Geral.xlsx` (3 empresas
 - Flask 3 + Flask-SQLAlchemy 3 + Flask-Migrate + Flask-WTF.
 - SQLAlchemy 2 / psycopg 3 em prod; SQLite local.
 - Jinja2 + design system próprio "Editorial Risk": CSS estático único (`app/static/css/app.css`, tokens claro/escuro via `html[data-theme]`) + JS vanilla (`app/static/js/app.js`) — **sem build, sem Tailwind**. Fontes via Google Fonts (CDN): Archivo, Instrument Serif, Space Mono.
-- openpyxl para o importer.
+- openpyxl para o importer; requests para chamar a Z-API (WhatsApp).
 - pytest para testes.
 
 ## Comandos
@@ -39,6 +39,9 @@ flask criar-gestor --email admin@exemplo.com --nome "Admin" --admin
 # rodar
 flask run                              # http://localhost:5000
 
+# alertas WhatsApp (Z-API) — config no HUD /integracoes/zapi; cron chama isto
+flask enviar-alertas-zapi --dry-run    # monta e imprime o resumo, sem enviar
+
 # testes
 pytest -q
 ```
@@ -49,21 +52,23 @@ pytest -q
 app/
   __init__.py     factory; registra blueprints; injeta STATUS_LABELS/BADGE/hoje/current_user no Jinja
   config.py       env vars; normaliza DATABASE_URL do provedor (Railway/Render) para postgresql+psycopg://
-  models.py       Gestor, Empresa, Setor, Funcionario, PeriodoAquisitivo, ProgramacaoFerias
+  models.py       Gestor, Empresa, Setor, Funcionario, PeriodoAquisitivo, ProgramacaoFerias, ConfiguracaoZapi, EnvioZapi
   status.py       lógica de status (funções puras, sem DB) — derivada de hoje; LABELS/CLASS/VAR
   dashviz.py      agregações do painel (donut, timeline, heatmap, trend, risco) — consome status.py, NÃO importa db
   importer.py     parsing do XLSX (multi-linha por funcionário, serial→data, decimais)
+  zapi.py         cliente HTTP da Z-API (WhatsApp); redige tokens em logs/erros
+  zapi_digest.py  monta o resumo de férias (puro, reusa status.py); render seguro de modelos
   icons.py        ICONS: SVGs inline (set de ícones de linha do redesenho)
   uihelpers.py    iniciais() e avatar_cor() (avatar determinístico)
-  cli.py          comandos Flask: import-xlsx, import-setores, seed-setores, criar-gestor, bootstrap-admin
+  cli.py          comandos Flask: import-xlsx, import-setores, seed-setores, criar-gestor, bootstrap-admin, enviar-alertas-zapi
   auth.py         login por email/senha (Gestor); helpers current_user, login_required, admin_required
-  forms.py        Flask-WTF (Login, Programação, Gestor, MudarSenha)
-  routes/         dashboard, funcionarios, gestores, programacao, setores, configuracoes (conta do gestor: hub + troca da própria senha)
+  forms.py        Flask-WTF (Login, Programação, Gestor, MudarSenha, ConfiguracaoZapi)
+  routes/         dashboard, funcionarios, gestores, programacao, setores, configuracoes (conta do gestor), integracoes (HUD Z-API/WhatsApp, admin)
   templates/      Jinja2 (design "Editorial Risk"); _macros.html (icon, status_pill, avatar, nav, brand…)
   static/         css/app.css (design system, claro/escuro), js/app.js (toggles + animações resilientes)
 migrations/       Alembic — DEVE ser commitada
 seeds/setores.py  setores padrão
-tests/            test_status.py, test_importer.py, test_programacao.py, test_auth.py, test_gestores.py, conftest.py
+tests/            test_status.py, test_importer.py, test_programacao.py, test_auth.py, test_gestores.py, test_zapi.py, conftest.py
 ```
 
 ## Regras de domínio (CLT) — ler antes de mexer em status/programação
@@ -82,11 +87,24 @@ Precedência (pior caso primeiro): `VENCIDA > A_VENCER > TEM_DIREITO > PROGRAMAD
 
 **Invariante crítico:** o status **nunca é persistido**. É sempre recalculado a partir de `date.today()`. Não adicionar colunas de status nos modelos.
 
+## Integração WhatsApp (Z-API)
+
+Aviso ativo de férias por WhatsApp, **todo configurável pelo admin** no HUD `/integracoes/zapi` (item "WhatsApp" na nav, admin-only) — credenciais, regras e modelos de mensagem ficam no **banco**, não em env var.
+
+- **Modelos** (`app/models.py`): `ConfiguracaoZapi` é um **singleton** (id=1; use sempre `ConfiguracaoZapi.obter()`, que cria a linha sob demanda e é robusto a corrida entre workers) e `EnvioZapi` é o log de cada disparo (histórico no HUD + trava anti-duplicação).
+- **Destinatários** são números avulsos (um por linha) que recebem um **resumo geral** das pendências — não há telefone por funcionário/gestor.
+- **Builder** `app/zapi_digest.py` (puro): `coletar_itens` reusa `app/status.py` e filtra pelas regras (`notificar_vencida/a_vencer/tem_direito`, `antecedencia_dias`); `montar_mensagem` faz **render seguro** dos modelos — `re.sub(r"\{(\w+)\}", …)`, chave desconhecida ou `{` solto ficam intactos. **Nunca usar `str.format`** (quebra com `KeyError`/`{` literal). Teto `MAX_LINHAS` (excedente vira "…e mais N").
+- **Cliente** `app/zapi.py`: `enviar_texto` (timeout; sucesso só com `messageId`/`zaapId`; nunca levanta). **Segurança:** o `instance_token` vai no PATH da URL e o `client_token` no header — `_redigir` remove os tokens de qualquer `detalhe`/log; o HUD nunca re-renderiza os tokens (PasswordField, **branco-mantém**, badge "configurado").
+- **Envio agendado:** `flask enviar-alertas-zapi [--force] [--dry-run]` (`app/cli.py`). Pensado para um **cron de hora em hora**: auto-restringe por `hora_envio` (hora **local** — depende de `TZ`), `apenas_dias_uteis`, e trava anti-dup **por destinatário** (`EnvioZapi` `ok` com `data_referencia` = hoje → retry de falha parcial + dedup numa regra só). `--force` ignora os gates; `--dry-run` só imprime. O botão "Enviar teste" do HUD (`/integracoes/zapi/testar`, `tipo=teste`) faz o mesmo bypass para validar a config.
+- **Invariante preservada:** `EnvioZapi` guarda entrega + contagem do instante — nunca o status de férias (que continua derivado de `date.today()`).
+- **Limitações (não "corrigir" sem pedir):** `apenas_dias_uteis` ignora feriados (só seg–sex); tokens em texto plano no banco (Postgres gerenciado).
+
 ## Convenções
 
 - Código de domínio em **português** (nomes de funções, variáveis, modelos). Manter o padrão ao editar.
+- **Datas sempre em dd/mm/aaaa** (pt-BR), na exibição (`strftime('%d/%m/%Y')`) e na digitação. Campos de data usam `CampoDataBR` (`app/forms.py`): input de texto com máscara (`[data-mask="data"]` em `app.js`), parse em `%d/%m/%Y` com fallback ISO. **Não usar `<input type="date">` nativo** — o formato de exibição dele segue o locale do navegador, não o do app.
 - `status.py` é **puro** — sem acesso a `db`. Manter assim para facilitar teste e raciocínio.
-- O importer mapeia colunas do XLSX por letra (Q, R, AC, AG, AH, Z, AB, W, X). Se mudar o layout da planilha, atualizar `importer.py` e `test_importer.py` juntos.
+- O importer mapeia colunas do XLSX por letra (Q, R, AC, AG, AH, Z, AB). Se mudar o layout da planilha, atualizar `importer.py` e `test_importer.py` juntos. As colunas W/X (gozo programado na planilha) são **ignoradas de propósito** — programação de férias nasce só no app.
 - `flask db migrate` após qualquer alteração em `models.py`; commitar o arquivo gerado em `migrations/versions/`.
 - Front-end **sem build**: um único `app/static/css/app.css` (design system "Editorial Risk", tokens claro/escuro em `html[data-theme]`) + `app/static/js/app.js` (vanilla). Não introduzir Tailwind/bundler sem necessidade real. Valores de estilo pontuais ficam inline no Jinja (fiéis ao protótipo); classes só para componentes repetidos.
 - Tema (claro/escuro) e layout (sidebar↔topnav) são controles de produto, persistidos em `localStorage` (`cf_theme`/`cf_layout`) e aplicados antes do paint por um script inline no `<head>` do `base.html`. **Resiliência (não regredir):** count-up tem fallback por `setTimeout`; entrada anima só `transform` (estado em repouso `opacity:1`); a troca de tema é instantânea (sem `transition` de cor no `body`); respeita `prefers-reduced-motion`.
@@ -104,6 +122,7 @@ Precedência (pior caso primeiro): `VENCIDA > A_VENCER > TEM_DIREITO > PROGRAMAD
 - Variáveis a configurar manualmente no painel: `DATABASE_URL`, `SECRET_KEY`, `FLASK_APP=app:create_app`, `TZ=America/Sao_Paulo`, `ALERTA_A_VENCER_DIAS` (opcional), `ADMIN_EMAIL` + `ADMIN_SENHA` (+ `ADMIN_NOME` opcional) para o bootstrap do admin.
 - Domínio público: **Settings → Networking → Generate Domain**.
 - `flask db upgrade` roda a cada deploy (parte do `startCommand`).
+- **Cron do WhatsApp (Z-API):** crie um **serviço de cron separado** (mesma imagem) com schedule **horário em UTC** (`0 * * * *`) e comando `flask enviar-alertas-zapi`. Esse serviço **não** roda `flask db upgrade` (quem migra é o web). Variáveis dele: `DATABASE_URL`, `SECRET_KEY` e **`TZ=America/Sao_Paulo`** (sem `TZ`, o gate de `hora_envio` roda em UTC). O comando se auto-restringe (hora/dia útil/anti-dup) → no máximo um envio/dia. A config (credenciais/regras/modelos) é feita no HUD `/integracoes/zapi`, não em env var. **Não** usar APScheduler in-process (gunicorn pode ter N workers → N agendadores → duplicação).
 - Import inicial via Railway CLI (planilha fica local — está no `.gitignore`):
   - dry-run: `railway run flask import-xlsx ./Controle_Ferias_Master_Geral.xlsx --dry-run`
   - real: `railway run flask import-xlsx ./Controle_Ferias_Master_Geral.xlsx`
@@ -122,7 +141,7 @@ Precedência (pior caso primeiro): `VENCIDA > A_VENCER > TEM_DIREITO > PROGRAMAD
 - **Remover funcionário = inativar (soft-delete):** `Funcionario.ativo` (migration `63859db4e304`, backfill `server_default=true`). Inativo some das listas e do painel e bloqueia programação; admin reativa pelo detalhe (lista tem toggle admin `?inativos=1`). **Filtragem do `ativo` mora em exatamente 2 queries de lista** (`dashboard.index`, `funcionarios.listar`) — ao criar novos caminhos de query de `Funcionario`, lembrar de aplicar o filtro. Funcionário criado manualmente nasce sem períodos aquisitivos → aparece como "Em formação" (períodos só vêm do importer).
 - **Login** é por gestor identificado (email/senha). Sem reset por email. O gestor troca a **própria** senha em **Configurações** (`/configuracoes/senha`, exige a senha atual; entrada pela engrenagem no menu do usuário); o admin também reseta a de qualquer gestor via `/gestores/<id>/senha`. A senha do admin de `ADMIN_EMAIL` é recuperável trocando `ADMIN_SENHA` e refazendo o deploy (ver Deploy) — **atenção:** como ela é ressincronizada a cada deploy, se *esse* admin trocar a senha pela UI ela será sobrescrita pelo valor de `ADMIN_SENHA` no próximo deploy.
 - **Acesso por setor (não por empresa):** o filtro de visão é por **setor**, não por empresa — um gestor não-admin de "Produção" vê Produção em **todas** as empresas. Admin atribui o setor ao gestor no cadastro (`/gestores/novo`) ou em `/gestores/<id>/editar`. **Consequência da migration `a15c6bf0c3a1`:** todo gestor não-admin pré-existente fica com `setor_id = NULL` e **não vê nada** até um admin atribuir um setor — é o efeito esperado de exigir setor para não-admin, não um bug. Gestor não-admin sem setor → listas/painel vazios e 403 nos detalhes.
-- **Re-import não deleta programações por padrão:** programações `origem=import` que sumiram da planilha (remarcadas/canceladas na origem) só geram aviso no re-import. O opt-in `flask import-xlsx --prune` remove as **não encerradas** (fim ≥ hoje); encerradas ficam como histórico e programações `origem=manual` (criadas pela UI) nunca são tocadas. O prune não restaura saldo — `dias_restantes` vem do AG da planilha no mesmo run.
+- **Programações nascem só no app:** o importer ignora as colunas W/X da planilha e nunca cria nem remove `ProgramacaoFerias` (a migration `c7d1a9e4f2b8` apagou as antigas `origem=import`, devolvendo o saldo das não encerradas). A planilha é base apenas de funcionários, períodos e saldos. **Atenção:** re-importar sobrescreve `dias_restantes` com o AG da planilha — se houver férias programadas pelo app depois do último import, re-importar com planilha desatualizada restaura o saldo antigo por cima do consumo feito no app.
 - **Abono, 13º, faltas** estão fora de escopo nesta versão — valores importados são exibidos mas não editáveis.
 
 ## Ao trabalhar aqui

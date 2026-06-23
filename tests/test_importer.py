@@ -1,5 +1,5 @@
 """Testes do importador: conversões, parsing multi-linha, idempotência e dry-run."""
-from datetime import date, timedelta
+from datetime import date
 
 from openpyxl import Workbook
 
@@ -40,7 +40,7 @@ def _planilha(tmp_path):
     def put(row, key, value):
         ws.cell(row=row, column=COL[key], value=value)
 
-    # Linha 8: funcionário com 1º período (fechado) + programação (W).
+    # Linha 8: funcionário com 1º período (fechado).
     put(8, "codigo", 3)
     put(8, "nome", "DOUGLAS SOUSA DA SILVA")
     put(8, "admissao", serial(date(2015, 10, 1)))
@@ -49,8 +49,10 @@ def _planilha(tmp_path):
     put(8, "ac_direito", 30)
     put(8, "ag_restante", 16)
     put(8, "ah_limite", serial(date(2026, 9, 15)))
-    put(8, "w_gozo", serial(date(2026, 7, 1)))
-    put(8, "x_dias", 16)
+    # Colunas W/X (gozo programado na planilha) ficam preenchidas de
+    # propósito: o importer deve IGNORÁ-LAS — programação nasce só no app.
+    ws.cell(row=8, column=23, value=serial(date(2026, 7, 1)))  # W
+    ws.cell(row=8, column=24, value=16)                        # X
 
     # Linha 9: continuação (SEM código) -> 2º período do mesmo funcionário.
     put(9, "q_inicio", serial(date(2025, 10, 1)))
@@ -70,7 +72,6 @@ def test_import_multilinha_e_conversoes(app, tmp_path):
     assert rel["empresas"]["novos"] == 1
     assert rel["funcionarios"]["novos"] == 1
     assert rel["periodos"]["novos"] == 2
-    assert rel["programacoes"]["novos"] == 1
     assert rel["dry_run"] is False
     assert rel["avisos"] == []
 
@@ -82,10 +83,14 @@ def test_import_multilinha_e_conversoes(app, tmp_path):
     p2 = PeriodoAquisitivo.query.filter_by(inicio=date(2025, 10, 1)).one()
     assert p2.dias_direito == 7.5  # vírgula convertida
 
-    prog = ProgramacaoFerias.query.one()
-    assert prog.data_inicio == date(2026, 7, 1)
-    assert prog.data_fim == date(2026, 7, 16)  # início + 16 - 1
-    assert prog.origem == "import"
+
+def test_import_nao_cria_programacoes(app, tmp_path):
+    # As colunas W/X da planilha são ignoradas: programação nasce só no app.
+    caminho = _planilha(tmp_path)
+    rel = importar_xlsx(str(caminho))
+
+    assert "programacoes" not in rel
+    assert ProgramacaoFerias.query.count() == 0
 
 
 def test_import_idempotente(app, tmp_path):
@@ -97,7 +102,6 @@ def test_import_idempotente(app, tmp_path):
         ("empresas", 1),
         ("funcionarios", 1),
         ("periodos", 2),
-        ("programacoes", 1),
     ]:
         assert rel[ent]["novos"] == 0, ent
         assert rel[ent]["atualizados"] == 0, ent
@@ -118,7 +122,6 @@ def test_dry_run_nao_persiste(app, tmp_path):
     # Nada foi gravado — rollback descartou tudo.
     assert Funcionario.query.count() == 0
     assert PeriodoAquisitivo.query.count() == 0
-    assert ProgramacaoFerias.query.count() == 0
 
 
 def test_avisos_de_divergencia(app, tmp_path):
@@ -129,7 +132,7 @@ def test_avisos_de_divergencia(app, tmp_path):
     def put(row, key, value):
         ws.cell(row=row, column=COL[key], value=value)
 
-    # Linha 8: dias_restantes > dias_direito + gozo após limite_gozo.
+    # Linha 8: dias_restantes > dias_direito.
     put(8, "codigo", 7)
     put(8, "nome", "FULANO DA SILVA")
     put(8, "q_inicio", serial(date(2023, 1, 1)))
@@ -137,103 +140,11 @@ def test_avisos_de_divergencia(app, tmp_path):
     put(8, "ac_direito", 30)
     put(8, "ag_restante", 40)            # > dias_direito → aviso
     put(8, "ah_limite", serial(date(2024, 12, 30)))
-    put(8, "w_gozo", serial(date(2025, 6, 1)))  # depois do limite → aviso
-    put(8, "x_dias", 10)
 
     caminho = tmp_path / "div.xlsx"
     wb.save(caminho)
 
     rel = importar_xlsx(str(caminho), dry_run=True)
 
-    assert len(rel["avisos"]) == 2
-    assert any("dias_restantes" in a for a in rel["avisos"])
-    assert any("após o limite" in a for a in rel["avisos"])
-
-
-def test_aviso_programacao_import_orfa(app, tmp_path):
-    caminho = _planilha(tmp_path)
-    importar_xlsx(str(caminho))
-
-    # Programação import sem linha correspondente na planilha (ex.: W/X
-    # preenchidos por engano e depois corrigidos na origem).
-    f = Funcionario.query.filter_by(codigo="3").one()
-    db.session.add(ProgramacaoFerias(
-        funcionario_id=f.id,
-        data_inicio=date(2026, 6, 1),
-        dias_gozo=30,
-        data_fim=date(2026, 6, 30),
-        origem="import",
-    ))
-    db.session.commit()
-
-    rel = importar_xlsx(str(caminho), dry_run=True)
-    orfas = [a for a in rel["avisos"] if "sem correspondência" in a]
-    assert len(orfas) == 1
-    assert "2026-06-01" in orfas[0]
-    assert rel["removidas"] == 0  # sem --prune, nunca remove
-
-
-def _orfa(codigo, inicio, dias, origem="import"):
-    """Programação sem correspondência na planilha, para testes de prune."""
-    f = Funcionario.query.filter_by(codigo=codigo).one()
-    prog = ProgramacaoFerias(
-        funcionario_id=f.id,
-        data_inicio=inicio,
-        dias_gozo=dias,
-        data_fim=inicio + timedelta(days=dias - 1),
-        origem=origem,
-    )
-    db.session.add(prog)
-    db.session.commit()
-    return prog
-
-
-def test_prune_remove_programacao_import_orfa(app, tmp_path):
-    caminho = _planilha(tmp_path)
-    importar_xlsx(str(caminho))
-    _orfa("3", date.today() + timedelta(days=45), 10)
-
-    rel = importar_xlsx(str(caminho), prune=True)
-
-    assert rel["removidas"] == 1
-    assert any("removida (--prune)" in a for a in rel["avisos"])
-    # A programação que está na planilha (W=01/07/2026) sobrevive.
-    assert ProgramacaoFerias.query.count() == 1
-    assert ProgramacaoFerias.query.one().data_inicio == date(2026, 7, 1)
-
-
-def test_prune_nao_remove_manual(app, tmp_path):
-    caminho = _planilha(tmp_path)
-    importar_xlsx(str(caminho))
-    _orfa("3", date.today() + timedelta(days=45), 10, origem="manual")
-
-    rel = importar_xlsx(str(caminho), prune=True)
-
-    assert rel["removidas"] == 0
-    assert ProgramacaoFerias.query.filter_by(origem="manual").count() == 1
-
-
-def test_prune_nao_remove_encerrada(app, tmp_path):
-    caminho = _planilha(tmp_path)
-    importar_xlsx(str(caminho))
-    # Férias já gozadas (fim no passado): histórico, prune não toca.
-    _orfa("3", date.today() - timedelta(days=40), 10)
-
-    rel = importar_xlsx(str(caminho), prune=True)
-
-    assert rel["removidas"] == 0
-    assert any("mantida" in a for a in rel["avisos"])
-    assert ProgramacaoFerias.query.filter_by(origem="import").count() == 2
-
-
-def test_prune_dry_run_nao_persiste(app, tmp_path):
-    caminho = _planilha(tmp_path)
-    importar_xlsx(str(caminho))
-    _orfa("3", date.today() + timedelta(days=45), 10)
-
-    rel = importar_xlsx(str(caminho), dry_run=True, prune=True)
-
-    assert rel["removidas"] == 1
-    assert any("seria removida" in a for a in rel["avisos"])
-    # Rollback do dry-run: a órfã continua no banco (além da da planilha).
-    assert ProgramacaoFerias.query.filter_by(origem="import").count() == 2
+    assert len(rel["avisos"]) == 1
+    assert "dias_restantes" in rel["avisos"][0]

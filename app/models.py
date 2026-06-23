@@ -6,6 +6,7 @@ Importante: o STATUS de férias nunca é armazenado — é derivado em runtime
 from datetime import datetime, timezone
 
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.exc import IntegrityError
 
 db = SQLAlchemy()
 
@@ -146,3 +147,139 @@ class ProgramacaoFerias(db.Model):
     funcionario = db.relationship("Funcionario", back_populates="programacoes")
     periodo = db.relationship("PeriodoAquisitivo")
     criado_por = db.relationship("Gestor")
+
+
+# --- Integração WhatsApp (Z-API) -------------------------------------------
+# Aviso ativo de férias por WhatsApp, todo configurável pelo admin (não por env
+# var). A configuração é um singleton (uma linha, id=1); ``EnvioZapi`` é o log de
+# disparos (histórico + trava anti-duplicação). O STATUS de férias continua NUNCA
+# persistido — ``EnvioZapi`` só registra o evento de entrega e a contagem do
+# instante do envio, não o status autoritativo (esse vem sempre de status.py).
+
+# Textos-modelo padrão (o admin edita pela tela). Variáveis no formato {chave}
+# são substituídas em runtime (render seguro: chaves desconhecidas ficam intactas).
+_MODELO_CABECALHO = (
+    "🏖️ *Controle de Férias* — {data}\n\n"
+    "{total} colaborador(es) com pendência de férias:\n"
+)
+_MODELO_LINHA = "• *{nome}* ({empresa}) — {status}, saldo {dias}, limite {limite}"
+_MODELO_SEM_PENDENCIAS = (
+    "✅ *Controle de Férias* — {data}\nNenhuma pendência de férias hoje."
+)
+
+
+class ConfiguracaoZapi(db.Model):
+    """Configuração única (singleton, id=1) da integração Z-API.
+
+    Use sempre ``ConfiguracaoZapi.obter()`` para ler/criar — garante a linha
+    única mesmo sob corrida entre workers do gunicorn.
+    """
+
+    __tablename__ = "configuracao_zapi"
+
+    id = db.Column(db.Integer, primary_key=True)
+    ativo = db.Column(db.Boolean, nullable=False, default=False)
+
+    # Credenciais Z-API. instance_token vai no PATH da URL; client_token no
+    # header Client-Token — nunca logar a URL completa nem o header (ver zapi.py).
+    base_url = db.Column(db.String(200), nullable=False, default="https://api.z-api.io")
+    instance_id = db.Column(db.String(120), nullable=True)
+    instance_token = db.Column(db.String(200), nullable=True)
+    client_token = db.Column(db.String(200), nullable=True)
+
+    # Números de destino (avulsos), um por linha. Recebem o resumo geral.
+    destinatarios = db.Column(db.Text, nullable=True)
+
+    # Regras: quais status entram no resumo.
+    notificar_vencida = db.Column(db.Boolean, nullable=False, default=True)
+    notificar_a_vencer = db.Column(db.Boolean, nullable=False, default=True)
+    notificar_tem_direito = db.Column(db.Boolean, nullable=False, default=False)
+    # Limiar (em dias) da faixa "a vencer" usado SÓ na notificação — independente
+    # do ALERTA_A_VENCER_DIAS do painel. Default espelha o padrão do app (60).
+    antecedencia_dias = db.Column(db.Integer, nullable=False, default=60)
+    # Janela de disparo do envio agendado (hora local; depende de TZ no cron).
+    hora_envio = db.Column(db.Integer, nullable=False, default=8)
+    apenas_dias_uteis = db.Column(db.Boolean, nullable=False, default=True)
+    # Se False, dias sem pendência não geram envio (e não gravam log "ok").
+    enviar_se_vazio = db.Column(db.Boolean, nullable=False, default=False)
+
+    # Modelos de mensagem (editáveis). Ver _MODELO_* para as variáveis.
+    modelo_cabecalho = db.Column(db.Text, nullable=False, default=_MODELO_CABECALHO)
+    modelo_linha = db.Column(db.Text, nullable=False, default=_MODELO_LINHA)
+    modelo_sem_pendencias = db.Column(
+        db.Text, nullable=False, default=_MODELO_SEM_PENDENCIAS
+    )
+
+    atualizado_em = db.Column(db.DateTime, default=_agora, onupdate=_agora)
+    atualizado_por_id = db.Column(
+        db.Integer, db.ForeignKey("gestor.id"), nullable=True
+    )
+
+    atualizado_por = db.relationship("Gestor")
+
+    @classmethod
+    def obter(cls):
+        """Retorna o singleton, criando-o (id=1) com os defaults se não existir.
+
+        Robusto a corrida: se dois processos criarem ao mesmo tempo, o segundo
+        cai no ``IntegrityError`` e relê a linha já gravada.
+        """
+        cfg = db.session.get(cls, 1)
+        if cfg is not None:
+            return cfg
+        cfg = cls(id=1)
+        db.session.add(cfg)
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            cfg = db.session.get(cls, 1)
+        return cfg
+
+    def lista_destinatarios(self):
+        """Linhas cruas de destinatários (uma por linha), como o admin digitou."""
+        if not self.destinatarios:
+            return []
+        return [ln.strip() for ln in self.destinatarios.splitlines() if ln.strip()]
+
+    def destinatarios_validos(self):
+        """Telefones normalizados, deduplicados e válidos (descarta o resto).
+
+        É a lista usada de fato para enviar e para a trava anti-duplicação:
+        evita disparo dobrado (mesmo número repetido, ou em formatos diferentes
+        que normalizam para o mesmo) e impede que uma linha inválida seja
+        re-tentada a cada execução do cron.
+        """
+        from .zapi import normalizar_telefone
+
+        validos = []
+        for linha in self.lista_destinatarios():
+            numero = normalizar_telefone(linha)
+            if numero and numero not in validos:
+                validos.append(numero)
+        return validos
+
+    def credenciais_ok(self):
+        return bool(self.base_url and self.instance_id and self.instance_token)
+
+    def pronta(self):
+        """Apta a enviar: ativa, com credenciais e ao menos um destinatário válido."""
+        return bool(
+            self.ativo and self.credenciais_ok() and self.destinatarios_validos()
+        )
+
+
+class EnvioZapi(db.Model):
+    """Log de cada disparo (por destinatário) — histórico no HUD e anti-dup."""
+
+    __tablename__ = "envio_zapi"
+
+    id = db.Column(db.Integer, primary_key=True)
+    criado_em = db.Column(db.DateTime, default=_agora)
+    # Dia de referência (data local) do resumo — base da trava anti-duplicação.
+    data_referencia = db.Column(db.Date, nullable=False)
+    tipo = db.Column(db.String(10), nullable=False, default="agendado")  # agendado|teste
+    destinatario = db.Column(db.String(40), nullable=False)
+    status = db.Column(db.String(10), nullable=False)  # ok|erro
+    detalhe = db.Column(db.Text, nullable=True)  # saneado — nunca contém token
+    total_itens = db.Column(db.Integer, nullable=True)

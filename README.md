@@ -40,17 +40,33 @@ Acesse http://localhost:5000 e faça login com o email/senha do admin criado
 acima. Pela tela **Gestores** (visível apenas para administradores), o admin
 cria os demais gestores.
 
-O re-import é idempotente e, por padrão, **não remove** programações que
-sumiram da planilha (só avisa). Use `flask import-xlsx ... --prune` para
-remover programações de origem import ausentes da planilha (apenas as não
-encerradas; programações criadas pela UI nunca são tocadas). Combine com
-`--dry-run` para ver a lista antes.
+A planilha é apenas a **base inicial** de funcionários, períodos aquisitivos
+e saldos — programações de férias nascem exclusivamente dentro do app (as
+colunas de gozo da planilha são ignoradas). O re-import é idempotente, mas
+sobrescreve os saldos com os valores da planilha: evite re-importar depois
+que as férias passarem a ser programadas pelo app.
 
 ## Testes
 
 ```powershell
 pytest -q
 ```
+
+## Alertas por WhatsApp (Z-API)
+
+Resumo das férias pendentes (vencidas / a vencer) enviado por WhatsApp para
+números configurados, via [Z-API](https://z-api.io). **Tudo é configurável pelo
+admin** na tela **WhatsApp** (`/integracoes/zapi`) — credenciais, regras (quais
+status notificar, antecedência, hora do envio) e os modelos de mensagem. Nada
+disso vai em variável de ambiente: mora no banco.
+
+- O admin preenche credenciais + destinatários, ajusta as regras/modelos e pode
+  **Enviar teste** para validar.
+- O envio automático é feito pelo comando `flask enviar-alertas-zapi`, pensado
+  para rodar por um **cron** (no Railway, um serviço de cron separado de hora em
+  hora). O comando se auto-restringe pela hora/dia configurados e tem trava
+  anti-duplicação, então dispara no máximo uma vez por dia.
+- Dry-run local (mostra o resumo, sem enviar): `flask enviar-alertas-zapi --dry-run`.
 
 ## Deploy no Railway
 

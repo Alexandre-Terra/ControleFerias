@@ -56,6 +56,17 @@
     requestAnimationFrame(function () { seg.style.strokeDasharray = len + " " + c; });
   }
 
+  /* ---- Máscara de data brasileira (dd/mm/aaaa) em [data-mask="data"] ----- */
+  document.addEventListener("input", function (e) {
+    var el = e.target;
+    if (!el || !el.matches || !el.matches('[data-mask="data"]')) return;
+    var d = el.value.replace(/\D/g, "").slice(0, 8);
+    var out = d.slice(0, 2);
+    if (d.length > 2) out += "/" + d.slice(2, 4);
+    if (d.length > 4) out += "/" + d.slice(4, 8);
+    el.value = out;
+  });
+
   /* ---- Toasts de sucesso: somem sozinhos (erros são alerts persistentes) -- */
   function autoDismiss(toast) {
     setTimeout(function () {

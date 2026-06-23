@@ -4,6 +4,10 @@ Lida com a estrutura multi-linha das abas de empresa: a primeira linha de um
 funcionário tem código (A) + nome (C); linhas seguintes sem código mas com
 início aquisitivo (Q) são períodos adicionais do mesmo funcionário.
 
+A planilha é base apenas para funcionários e períodos aquisitivos —
+**programações de férias nascem exclusivamente no app** e nunca são
+importadas (as colunas W/X da planilha são ignoradas).
+
 Modo ``dry_run``: faz tudo dentro de uma transação e dá rollback no final,
 permitindo conferir contagens (novos / atualizados / inalterados) e divergências
 de consistência antes de gravar de verdade.
@@ -13,7 +17,7 @@ from datetime import date, datetime, timedelta
 
 from openpyxl import load_workbook
 
-from .models import Empresa, Funcionario, PeriodoAquisitivo, ProgramacaoFerias, Setor, db
+from .models import Empresa, Funcionario, PeriodoAquisitivo, Setor, db
 
 EXCEL_EPOCH = date(1899, 12, 30)
 
@@ -29,8 +33,6 @@ COL = {
     "vencto": 11,   # K
     "q_inicio": 17, # Q - início aquisitivo
     "r_fim": 18,    # R - fim aquisitivo
-    "w_gozo": 23,   # W - início gozo
-    "x_dias": 24,   # X - dias de gozo
     "z_abono": 26,  # Z - abono
     "ab_13": 28,    # AB - 13º
     "ac_direito": 29,   # AC - dias de direito
@@ -43,7 +45,6 @@ CAMPOS_PERIODO = (
     "fim", "dias_direito", "dias_restantes", "limite_gozo",
     "dias_abono", "decimo_terceiro",
 )
-CAMPOS_PROG = ("periodo_aquisitivo_id", "dias_gozo", "data_fim", "origem")
 
 
 def to_date(v):
@@ -165,36 +166,19 @@ def _validar_periodo(p, ref, avisos):
             )
 
 
-def _validar_programacao(prog, periodo, ref, avisos):
-    if periodo.fim and prog.data_inicio < periodo.fim:
-        avisos.append(
-            f"{ref}: gozo em {prog.data_inicio} antes do fim do aquisitivo "
-            f"({periodo.fim})"
-        )
-    if periodo.limite_gozo and prog.data_inicio > periodo.limite_gozo:
-        avisos.append(
-            f"{ref}: gozo em {prog.data_inicio} após o limite "
-            f"({periodo.limite_gozo})"
-        )
-
-
-def importar_xlsx(caminho, dry_run=False, prune=False):
+def importar_xlsx(caminho, dry_run=False):
     """Importa a planilha. Retorna relatório estruturado.
 
     Quando ``dry_run=True``, dá rollback no final em vez de commit — os
     contadores e avisos refletem o que *seria* gravado.
-
-    Quando ``prune=True``, remove programações ``origem=import`` que sumiram
-    da planilha (remarcadas/canceladas na origem), desde que não encerradas.
     """
     wb = load_workbook(caminho, data_only=True, read_only=True)
 
     contadores = {
         e: {"novos": 0, "atualizados": 0, "inalterados": 0}
-        for e in ("empresas", "funcionarios", "periodos", "programacoes")
+        for e in ("empresas", "funcionarios", "periodos")
     }
     avisos = []
-    programacoes_planilha = set()  # (funcionario_id, data_inicio) vistos na planilha
 
     def registrar(entidade, novo, antes, depois):
         if novo:
@@ -263,66 +247,13 @@ def importar_xlsx(caminho, dry_run=False, prune=False):
             registrar("periodos", novo_p, antes_p, depois_p)
             _validar_periodo(periodo, ref, avisos)
 
-            # Programação de férias já existente (coluna W com data).
-            w_inicio = to_date(cell("w_gozo"))
-            if w_inicio:
-                programacoes_planilha.add((funcionario_atual.id, w_inicio))
-                dias = to_float(cell("x_dias"))
-                dias_int = int(dias) if dias else 0
-                prog, novo_prog = _get_or_create(
-                    ProgramacaoFerias,
-                    funcionario_id=funcionario_atual.id,
-                    data_inicio=w_inicio,
-                )
-                antes_pr = _snapshot(prog, CAMPOS_PROG)
-                prog.periodo_aquisitivo_id = periodo.id
-                prog.dias_gozo = dias_int
-                prog.data_fim = (
-                    w_inicio + timedelta(days=dias_int - 1) if dias_int else w_inicio
-                )
-                prog.origem = "import"
-                depois_pr = _snapshot(prog, CAMPOS_PROG)
-                registrar("programacoes", novo_prog, antes_pr, depois_pr)
-                _validar_programacao(prog, periodo, ref, avisos)
-
-    # Programações importadas que sumiram da planilha (remarcadas/canceladas
-    # na origem): por padrão o import nunca deleta — sinaliza para correção
-    # pela UI. Com ``prune=True`` remove as não encerradas; as encerradas
-    # ficam como histórico (espelha a regra da UI, que não cancela férias já
-    # gozadas). Saldo não é restaurado no prune: ``dias_restantes`` acabou de
-    # ser sobrescrito pelo AG da planilha, que é a fonte autoritativa.
-    removidas = 0
-    hoje = date.today()
-    for prog in db.session.query(ProgramacaoFerias).filter_by(origem="import"):
-        if (prog.funcionario_id, prog.data_inicio) in programacoes_planilha:
-            continue
-        ref_prog = f"{prog.funcionario.nome} início {prog.data_inicio}"
-        if not prune:
-            avisos.append(
-                f"programação origem=import sem correspondência na planilha: "
-                f"{ref_prog} — se for engano, cancele pela tela do "
-                f"funcionário ou rode com --prune"
-            )
-        elif (prog.data_fim or prog.data_inicio) >= hoje:
-            avisos.append(
-                f"{'seria removida' if dry_run else 'removida'} (--prune): "
-                f"{ref_prog} — ausente da planilha"
-            )
-            db.session.delete(prog)
-            removidas += 1
-        else:
-            avisos.append(
-                f"mantida apesar de ausente da planilha (--prune não remove "
-                f"encerradas): {ref_prog}"
-            )
-
     if dry_run:
         db.session.rollback()
     else:
         db.session.commit()
     wb.close()
 
-    return {**contadores, "removidas": removidas, "avisos": avisos, "dry_run": dry_run}
+    return {**contadores, "avisos": avisos, "dry_run": dry_run}
 
 
 def importar_setores(caminho, dry_run=False):

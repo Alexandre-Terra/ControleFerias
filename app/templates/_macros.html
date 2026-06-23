@@ -56,7 +56,8 @@
     ('dashboard.index', 'Painel', 'grid', bp == 'dashboard', false),
     ('funcionarios.listar', 'Funcionários', 'users', bp in ['funcionarios', 'programacao'], false),
     ('setores.listar', 'Setores', 'building', bp == 'setores', true),
-    ('gestores.listar', 'Gestores', 'shield', bp == 'gestores', true)
+    ('gestores.listar', 'Gestores', 'shield', bp == 'gestores', true),
+    ('integracoes.zapi_config', 'WhatsApp', 'messageCircle', bp == 'integracoes', true)
   ] -%}
   {% for endpoint, label, ic, active, admin_only in items -%}
     {% if not admin_only or (current_user and current_user.is_admin) -%}

@@ -12,15 +12,39 @@ from wtforms import (
     SelectField,
     StringField,
     SubmitField,
+    TextAreaField,
 )
 from wtforms.validators import (
     DataRequired,
     Email,
     EqualTo,
+    InputRequired,
     Length,
     NumberRange,
     Optional,
 )
+from wtforms.widgets import TextInput
+
+
+class CampoDataBR(DateField):
+    """Data no formato brasileiro (dd/mm/aaaa), exibida e digitada assim.
+
+    Renderiza como texto (com máscara em ``app.js``) em vez do ``type=date``
+    nativo, cujo formato de exibição segue o locale do navegador — não o do
+    app. No parse aceita também ISO (aaaa-mm-dd) por compatibilidade.
+    """
+
+    widget = TextInput()
+
+    def __init__(self, label=None, validators=None, **kwargs):
+        kwargs.setdefault("format", ["%d/%m/%Y", "%Y-%m-%d"])
+        super().__init__(label, validators, **kwargs)
+
+    def process_formdata(self, valuelist):
+        try:
+            super().process_formdata(valuelist)
+        except ValueError:
+            raise ValueError("Data inválida — use o formato dd/mm/aaaa.")
 
 
 class LoginForm(FlaskForm):
@@ -32,7 +56,13 @@ class LoginForm(FlaskForm):
 class ProgramacaoForm(FlaskForm):
     periodo_id = SelectField("Período aquisitivo", coerce=int,
                              validators=[DataRequired()])
-    data_inicio = DateField("Início das férias", validators=[DataRequired()])
+    # InputRequired (não DataRequired): DataRequired apagaria o erro de parse
+    # do CampoDataBR quando a data é inválida e o substituiria pela mensagem
+    # genérica em inglês.
+    data_inicio = CampoDataBR(
+        "Início das férias",
+        validators=[InputRequired("Informe a data de início.")],
+    )
     dias_gozo = IntegerField(
         "Dias de gozo", validators=[DataRequired(), NumberRange(min=1, max=30)]
     )
@@ -70,7 +100,7 @@ class FuncionarioForm(FlaskForm):
     setor_id = SelectField("Setor", coerce=int, validators=[Optional()])
     codigo = StringField("Código", validators=[DataRequired(), Length(max=40)])
     nome = StringField("Nome", validators=[DataRequired(), Length(max=160)])
-    data_admissao = DateField("Admissão", validators=[Optional()])
+    data_admissao = CampoDataBR("Admissão", validators=[Optional()])
     submit = SubmitField("Salvar")
 
 
@@ -84,6 +114,54 @@ class MudarSenhaForm(FlaskForm):
         validators=[DataRequired(), EqualTo("senha", message="As senhas não conferem.")],
     )
     submit = SubmitField("Alterar senha")
+
+
+class ConfiguracaoZapiForm(FlaskForm):
+    """Configuração da integração WhatsApp (Z-API), editada pelo admin.
+
+    Os tokens são ``PasswordField`` — o WTForms não re-renderiza o valor salvo
+    (masking), e em branco mantêm o atual (mesmo padrão da senha em ``GestorForm``).
+    """
+
+    ativo = BooleanField("Integração ativa")
+
+    base_url = StringField("URL base", validators=[Optional(), Length(max=200)])
+    instance_id = StringField("Instance ID", validators=[Optional(), Length(max=120)])
+    instance_token = PasswordField(
+        "Instance Token", validators=[Optional(), Length(max=200)]
+    )
+    client_token = PasswordField(
+        "Client-Token (Account Security Token)",
+        validators=[Optional(), Length(max=200)],
+    )
+    destinatarios = TextAreaField("Destinatários", validators=[Optional()])
+
+    notificar_vencida = BooleanField("Incluir férias vencidas")
+    notificar_a_vencer = BooleanField("Incluir férias a vencer")
+    notificar_tem_direito = BooleanField("Incluir quem já tem direito")
+    antecedencia_dias = IntegerField(
+        "Antecedência (dias) para 'a vencer'",
+        validators=[InputRequired(), NumberRange(min=0, max=3650)],
+    )
+    hora_envio = IntegerField(
+        "Hora do envio (0–23)", validators=[InputRequired(), NumberRange(min=0, max=23)]
+    )
+    apenas_dias_uteis = BooleanField("Enviar apenas em dias úteis")
+    enviar_se_vazio = BooleanField("Enviar mesmo sem pendências")
+
+    modelo_cabecalho = TextAreaField("Modelo — cabeçalho", validators=[Optional()])
+    modelo_linha = TextAreaField("Modelo — linha", validators=[Optional()])
+    modelo_sem_pendencias = TextAreaField(
+        "Modelo — sem pendências", validators=[Optional()]
+    )
+
+    submit = SubmitField("Salvar configuração")
+
+
+class TestarEnvioZapiForm(FlaskForm):
+    """Form mínimo só para o botão 'enviar teste' (carrega o token CSRF)."""
+
+    submit = SubmitField("Enviar teste agora")
 
 
 class AlterarSenhaForm(FlaskForm):

@@ -40,7 +40,7 @@
           </div>
           <div>
             <label class="lbl">Admissão</label>
-            {{ form.data_admissao(class_="field", type="date") }}
+            {{ form.data_admissao(class_="field", placeholder="dd/mm/aaaa", inputmode="numeric", autocomplete="off", data_mask="data") }}
             {% for e in form.data_admissao.errors %}<p style="color:var(--risk);font-size:12px;margin:6px 0 0">{{ e }}</p>{% endfor %}
           </div>
         </div>
