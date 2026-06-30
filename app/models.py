@@ -166,6 +166,13 @@ _MODELO_LINHA = "• *{nome}* ({empresa}) — {status}, saldo {dias}, limite {li
 _MODELO_SEM_PENDENCIAS = (
     "✅ *Controle de Férias* — {data}\nNenhuma pendência de férias hoje."
 )
+# Bloco de "tempo de serviço": marcos por data de admissão (45/90/120 dias e
+# aniversários). Ver app/tempo.py. {dias} é quantos dias faltam para o marco.
+_MODELO_TEMPO_CABECALHO = (
+    "⏳ *Tempo de empresa* — {data}\n\n"
+    "{total} colaborador(es) com marco de tempo de serviço:\n"
+)
+_MODELO_TEMPO = "• *{nome}* ({empresa}) — {marco} em {data} (faltam {dias} dia(s))"
 
 
 class ConfiguracaoZapi(db.Model):
@@ -194,6 +201,9 @@ class ConfiguracaoZapi(db.Model):
     notificar_vencida = db.Column(db.Boolean, nullable=False, default=True)
     notificar_a_vencer = db.Column(db.Boolean, nullable=False, default=True)
     notificar_tem_direito = db.Column(db.Boolean, nullable=False, default=False)
+    # Inclui no resumo os marcos de tempo de serviço (45/90/120 dias e
+    # aniversários) cujo dia de aviso é hoje. Independente das regras de férias.
+    notificar_tempo_servico = db.Column(db.Boolean, nullable=False, default=True)
     # Limiar (em dias) da faixa "a vencer" usado SÓ na notificação — independente
     # do ALERTA_A_VENCER_DIAS do painel. Default espelha o padrão do app (60).
     antecedencia_dias = db.Column(db.Integer, nullable=False, default=60)
@@ -209,6 +219,10 @@ class ConfiguracaoZapi(db.Model):
     modelo_sem_pendencias = db.Column(
         db.Text, nullable=False, default=_MODELO_SEM_PENDENCIAS
     )
+    modelo_tempo_cabecalho = db.Column(
+        db.Text, nullable=False, default=_MODELO_TEMPO_CABECALHO
+    )
+    modelo_tempo = db.Column(db.Text, nullable=False, default=_MODELO_TEMPO)
 
     atualizado_em = db.Column(db.DateTime, default=_agora, onupdate=_agora)
     atualizado_por_id = db.Column(

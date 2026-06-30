@@ -139,6 +139,7 @@ class ConfiguracaoZapiForm(FlaskForm):
     notificar_vencida = BooleanField("Incluir férias vencidas")
     notificar_a_vencer = BooleanField("Incluir férias a vencer")
     notificar_tem_direito = BooleanField("Incluir quem já tem direito")
+    notificar_tempo_servico = BooleanField("Incluir marcos de tempo de serviço")
     antecedencia_dias = IntegerField(
         "Antecedência (dias) para 'a vencer'",
         validators=[InputRequired(), NumberRange(min=0, max=3650)],
@@ -153,6 +154,12 @@ class ConfiguracaoZapiForm(FlaskForm):
     modelo_linha = TextAreaField("Modelo — linha", validators=[Optional()])
     modelo_sem_pendencias = TextAreaField(
         "Modelo — sem pendências", validators=[Optional()]
+    )
+    modelo_tempo_cabecalho = TextAreaField(
+        "Modelo — cabeçalho do tempo de serviço", validators=[Optional()]
+    )
+    modelo_tempo = TextAreaField(
+        "Modelo — linha do tempo de serviço", validators=[Optional()]
     )
 
     submit = SubmitField("Salvar configuração")

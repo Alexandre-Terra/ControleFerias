@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+{% import '_macros.html' as m with context %}
+{% block title %}Tempo Funcionários · Controle de Férias{% endblock %}
+{% block page_title %}Tempo Funcionários{% endblock %}
+{% block content %}
+<div style="display:grid;gap:20px">
+
+  <div class="reveal r1" style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:4px">
+    <div>
+      <div class="eyebrow" style="margin-bottom:8px">Tempo de serviço</div>
+      <h2 class="display" style="font-size:24px;letter-spacing:-.03em">Tempo Funcionários</h2>
+      <div style="color:var(--ink-2);font-size:13.5px;margin-top:6px;max-width:620px">Marcos a partir da <strong>data de admissão</strong>: 45 e 90 dias (aviso 5 dias antes), 120 dias (no dia) e aniversários, 1 ano e sucessivos (aviso 2 dias antes). Os marcos do dia entram no resumo do WhatsApp.</div>
+    </div>
+    <span class="pill {{ 's-ok' if zapi_ativo else 's-idle' }}" style="flex:0 0 auto" title="Integração WhatsApp + marcos de tempo de serviço"><span class="dot"></span>{{ 'WhatsApp ativo' if zapi_ativo else 'WhatsApp inativo' }}</span>
+  </div>
+
+  {# ---- Alertas de hoje (o que vai para o WhatsApp) ---- #}
+  <div class="reveal r2 panel" style="padding:0;overflow:hidden">
+    <div style="height:5px;background:var(--{{ 'warn' if alertas_hoje else 'idle' }})"></div>
+    <div style="padding:20px 24px;display:grid;gap:14px">
+      <div style="display:flex;align-items:center;gap:10px">
+        {{ m.icon('bell', 18) }}
+        <h3 class="display" style="font-size:18px">Avisos de hoje</h3>
+        <span class="pill {{ 's-warn' if alertas_hoje else 's-idle' }}" style="font-size:11px;padding:3px 9px"><span class="dot"></span>{{ alertas_hoje | length }}</span>
+      </div>
+      {% if alertas_hoje %}
+      <div style="display:grid;gap:8px">
+        {% for a in alertas_hoje %}
+        <a href="{{ url_for('funcionarios.detalhe', func_id=a.f.id) }}" class="lrow" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;background:var(--surface-2)">
+          {{ m.avatar(a.f.nome, 32) }}
+          <div style="min-width:0;flex:1">
+            <div style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ a.f.nome }}</div>
+            <div class="mono" style="font-size:11px;color:var(--ink-3)">{{ a.f.empresa.nome if a.f.empresa else '—' }}{% if a.f.setor %} · {{ a.f.setor.nome }}{% endif %}</div>
+          </div>
+          <span class="pill s-warn" style="font-size:12px"><span class="dot"></span>{{ a.marco.label }}</span>
+          <div class="tnum" style="font-size:12.5px;color:var(--ink-2);white-space:nowrap">
+            {% if a.marco.dias_faltam == 0 %}hoje{% else %}em {{ a.marco.dias_faltam }}d ({{ a.marco.data.strftime('%d/%m') }}){% endif %}
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div style="padding:8px 2px;color:var(--ink-3);font-size:13.5px">Nenhum marco a avisar hoje.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ---- Tabela: tempo de casa + próximo marco ---- #}
+  <div class="reveal r3" style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px">
+    <div class="eyebrow">Colaboradores · próximo marco</div>
+    <div style="color:var(--ink-3);font-size:12.5px">{{ linhas | length }} com admissão{% if sem_admissao %} · {{ sem_admissao }} sem data de admissão{% endif %}</div>
+  </div>
+
+  <div class="reveal r3 panel" style="overflow:hidden">
+    <div style="display:grid;grid-template-columns:minmax(0,2fr) 1.1fr 1fr 1.2fr 1.3fr .9fr;gap:14px;padding:13px 20px;border-bottom:1px solid var(--line);background:var(--surface-2)">
+      {% for h in ['Colaborador', 'Empresa', 'Admissão', 'Tempo de casa', 'Próximo marco', 'Faltam'] %}<div class="eyebrow" style="font-size:10.5px">{{ h }}</div>{% endfor %}
+    </div>
+    {% for l in linhas %}
+    <a href="{{ url_for('funcionarios.detalhe', func_id=l.f.id) }}" class="lrow" style="display:grid;grid-template-columns:minmax(0,2fr) 1.1fr 1fr 1.2fr 1.3fr .9fr;gap:14px;padding:12px 20px;align-items:center;{{ 'border-top:1px solid var(--line)' if not loop.first }}">
+      <div style="display:flex;align-items:center;gap:11px;min-width:0">
+        {{ m.avatar(l.f.nome, 34) }}
+        <div style="min-width:0">
+          <div style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ l.f.nome }}</div>
+          <div class="mono" style="font-size:11px;color:var(--ink-3)">#{{ l.f.codigo }}</div>
+        </div>
+      </div>
+      <div style="font-size:13px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ l.f.empresa.nome if l.f.empresa else '—' }}</div>
+      <div class="tnum" style="font-size:12.5px;color:var(--ink-2)">{{ l.f.data_admissao.strftime('%d/%m/%Y') }}</div>
+      <div style="font-size:13px;color:var(--ink-2)">{{ l.tempo_casa }}</div>
+      {% if l.proximo %}
+      <div style="display:flex;align-items:center;gap:8px;min-width:0">
+        <span class="pill {{ 's-warn' if l.proximo.alertar_hoje else 's-info' }}" style="font-size:11.5px"><span class="dot"></span>{{ l.proximo.label }}</span>
+        <span class="mono" style="font-size:11px;color:var(--ink-3)">{{ l.proximo.data.strftime('%d/%m/%Y') }}</span>
+      </div>
+      <div class="tnum" style="font-size:12.5px;color:var(--ink-2)">
+        {% if l.proximo.alertar_hoje %}<span style="color:var(--warn);font-weight:700">aviso hoje</span>
+        {% elif l.proximo.dias_faltam == 0 %}<span style="font-weight:700">hoje</span>
+        {% else %}{{ l.proximo.dias_faltam }}d{% endif %}
+      </div>
+      {% else %}
+      <div style="color:var(--ink-3)">—</div>
+      <div style="color:var(--ink-3)">—</div>
+      {% endif %}
+    </a>
+    {% else %}
+    <div style="padding:40px;text-align:center;color:var(--ink-3)">Nenhum colaborador com data de admissão.</div>
+    {% endfor %}
+  </div>
+
+</div>
+{% endblock %}

@@ -29,6 +29,7 @@ def create_app(config_class=Config):
         integracoes,
         programacao,
         setores,
+        tempo,
     )
 
     app.register_blueprint(auth.bp)
@@ -40,6 +41,7 @@ def create_app(config_class=Config):
     app.register_blueprint(integracoes.bp)
     app.register_blueprint(programacao.bp)
     app.register_blueprint(setores.bp)
+    app.register_blueprint(tempo.bp)
 
     # Rotas POST sem Flask-WTF (ferramenta interna, documentado no README/CLAUDE).
     csrf.exempt(app.view_functions["auth.logout"])

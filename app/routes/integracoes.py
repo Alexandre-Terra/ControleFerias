@@ -46,6 +46,7 @@ def zapi_config():
         cfg.notificar_vencida = form.notificar_vencida.data
         cfg.notificar_a_vencer = form.notificar_a_vencer.data
         cfg.notificar_tem_direito = form.notificar_tem_direito.data
+        cfg.notificar_tempo_servico = form.notificar_tempo_servico.data
         cfg.antecedencia_dias = form.antecedencia_dias.data
         cfg.hora_envio = form.hora_envio.data
         cfg.apenas_dias_uteis = form.apenas_dias_uteis.data
@@ -56,6 +57,10 @@ def zapi_config():
         cfg.modelo_sem_pendencias = (
             form.modelo_sem_pendencias.data or cfg.modelo_sem_pendencias
         )
+        cfg.modelo_tempo_cabecalho = (
+            form.modelo_tempo_cabecalho.data or cfg.modelo_tempo_cabecalho
+        )
+        cfg.modelo_tempo = form.modelo_tempo.data or cfg.modelo_tempo
         cfg.atualizado_por_id = current_user().id
         db.session.commit()
         flash("Configuração da Z-API salva.", "ok")
@@ -92,7 +97,8 @@ def zapi_testar():
 
     hoje = date.today()
     itens = zapi_digest.coletar_itens(hoje, cfg)
-    mensagem = zapi_digest.montar_mensagem(cfg, itens, hoje, forcar=True)
+    marcos = zapi_digest.coletar_marcos(hoje, cfg)
+    mensagem = zapi_digest.montar_mensagem(cfg, itens, hoje, marcos=marcos, forcar=True)
 
     enviados = falhas = 0
     for numero in cfg.destinatarios_validos():
@@ -104,7 +110,7 @@ def zapi_testar():
                 destinatario=numero,
                 status="ok" if ok else "erro",
                 detalhe=detalhe,
-                total_itens=len(itens),
+                total_itens=len(itens) + len(marcos),
             )
         )
         if ok:

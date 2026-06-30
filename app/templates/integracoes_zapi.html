@@ -68,7 +68,9 @@
         <label style="display:inline-flex;align-items:center;gap:9px;font-size:14px;cursor:pointer">{{ form.notificar_vencida() }} <span>Incluir <strong>férias vencidas</strong></span></label>
         <label style="display:inline-flex;align-items:center;gap:9px;font-size:14px;cursor:pointer">{{ form.notificar_a_vencer() }} <span>Incluir <strong>férias a vencer</strong></span></label>
         <label style="display:inline-flex;align-items:center;gap:9px;font-size:14px;cursor:pointer">{{ form.notificar_tem_direito() }} <span>Incluir quem <strong>já tem direito</strong> (sem urgência)</span></label>
+        <label style="display:inline-flex;align-items:center;gap:9px;font-size:14px;cursor:pointer">{{ form.notificar_tempo_servico() }} <span>Incluir <strong>marcos de tempo de serviço</strong> (45/90/120 dias e aniversários)</span></label>
       </div>
+      <p style="color:var(--ink-3);font-size:12px;margin:-4px 0 0">Os marcos de tempo de serviço (ver <a href="{{ url_for('tempo.index') }}" style="color:var(--accent-2)">Tempo Funcionários</a>) entram no mesmo resumo no dia de aviso de cada um.</p>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
         <div>
           <label class="lbl">Antecedência "a vencer" (dias)</label>
@@ -106,6 +108,14 @@
       <div>
         <label class="lbl">Sem pendências <span style="color:var(--ink-3);font-weight:400">· {data}</span></label>
         {{ form.modelo_sem_pendencias(class_="field", rows=2, style="resize:vertical") }}
+      </div>
+      <div>
+        <label class="lbl">Tempo de serviço — cabeçalho <span style="color:var(--ink-3);font-weight:400">· {data}, {total}</span></label>
+        {{ form.modelo_tempo_cabecalho(class_="field", rows=3, style="resize:vertical") }}
+      </div>
+      <div>
+        <label class="lbl">Tempo de serviço — linha <span style="color:var(--ink-3);font-weight:400">· {nome}, {empresa}, {setor}, {marco}, {data}, {dias}</span></label>
+        {{ form.modelo_tempo(class_="field", rows=2, style="resize:vertical") }}
       </div>
     </div>
 

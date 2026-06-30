@@ -54,6 +54,7 @@ app/
   config.py       env vars; normaliza DATABASE_URL do provedor (Railway/Render) para postgresql+psycopg://
   models.py       Gestor, Empresa, Setor, Funcionario, PeriodoAquisitivo, ProgramacaoFerias, ConfiguracaoZapi, EnvioZapi
   status.py       lógica de status (funções puras, sem DB) — derivada de hoje; LABELS/CLASS/VAR
+  tempo.py        marcos de tempo de serviço (funções puras, sem DB) — 45/90/120 dias e aniversários a partir da data de admissão; dia de aviso por antecedência
   dashviz.py      agregações do painel (donut, timeline, heatmap, trend, risco) — consome status.py, NÃO importa db
   importer.py     parsing do XLSX (multi-linha por funcionário, serial→data, decimais)
   zapi.py         cliente HTTP da Z-API (WhatsApp); redige tokens em logs/erros
@@ -63,7 +64,7 @@ app/
   cli.py          comandos Flask: import-xlsx, import-setores, seed-setores, criar-gestor, bootstrap-admin, enviar-alertas-zapi
   auth.py         login por email/senha (Gestor); helpers current_user, login_required, admin_required
   forms.py        Flask-WTF (Login, Programação, Gestor, MudarSenha, ConfiguracaoZapi)
-  routes/         dashboard, funcionarios, gestores, programacao, setores, configuracoes (conta do gestor), integracoes (HUD Z-API/WhatsApp, admin)
+  routes/         dashboard, funcionarios, tempo (Tempo Funcionários, admin-only), gestores, programacao, setores, configuracoes (conta do gestor), integracoes (HUD Z-API/WhatsApp, admin)
   templates/      Jinja2 (design "Editorial Risk"); _macros.html (icon, status_pill, avatar, nav, brand…)
   static/         css/app.css (design system, claro/escuro), js/app.js (toggles + animações resilientes)
 migrations/       Alembic — DEVE ser commitada
@@ -93,7 +94,8 @@ Aviso ativo de férias por WhatsApp, **todo configurável pelo admin** no HUD `/
 
 - **Modelos** (`app/models.py`): `ConfiguracaoZapi` é um **singleton** (id=1; use sempre `ConfiguracaoZapi.obter()`, que cria a linha sob demanda e é robusto a corrida entre workers) e `EnvioZapi` é o log de cada disparo (histórico no HUD + trava anti-duplicação).
 - **Destinatários** são números avulsos (um por linha) que recebem um **resumo geral** das pendências — não há telefone por funcionário/gestor.
-- **Builder** `app/zapi_digest.py` (puro): `coletar_itens` reusa `app/status.py` e filtra pelas regras (`notificar_vencida/a_vencer/tem_direito`, `antecedencia_dias`); `montar_mensagem` faz **render seguro** dos modelos — `re.sub(r"\{(\w+)\}", …)`, chave desconhecida ou `{` solto ficam intactos. **Nunca usar `str.format`** (quebra com `KeyError`/`{` literal). Teto `MAX_LINHAS` (excedente vira "…e mais N").
+- **Tempo de serviço (marcos por admissão):** a página **Tempo Funcionários** (`/tempo-funcionarios`, blueprint `tempo`, item de nav abaixo de Funcionários, **admin-only**) lista, por colaborador ativo, o tempo de casa e o próximo marco, destacando os que avisam hoje. A lógica é pura em `app/tempo.py` (sem DB, como `status.py`): marcos de **45 dias** e **90 dias** (avisam 5 dias antes), **120 dias** (avisa no dia) e **aniversários** — 1 ano e, sucessivamente, todos os anos (avisam 2 dias antes). Um marco "alerta hoje" quando `data_marco - antecedência == hoje` (disparo único; não há janela). Esses marcos entram **no mesmo resumo do WhatsApp**: `zapi_digest.coletar_marcos` é varrido junto com `coletar_itens` no comando agendado e no "enviar teste", e `montar_mensagem` anexa um bloco de tempo de serviço (toggle `notificar_tempo_servico` + modelos `modelo_tempo_cabecalho`/`modelo_tempo`, editáveis no HUD). **Limitação:** como os demais gates, o aviso é de dia exato — se a janela do cron pular o dia (fim de semana com `apenas_dias_uteis`, downtime), aquele aviso não sai.
+- **Builder** `app/zapi_digest.py` (puro): `coletar_itens` reusa `app/status.py` e filtra pelas regras (`notificar_vencida/a_vencer/tem_direito`, `antecedencia_dias`); `coletar_marcos` reusa `app/tempo.py` (marcos do dia); `montar_mensagem` faz **render seguro** dos modelos — `re.sub(r"\{(\w+)\}", …)`, chave desconhecida ou `{` solto ficam intactos. **Nunca usar `str.format`** (quebra com `KeyError`/`{` literal). Teto `MAX_LINHAS` (excedente vira "…e mais N").
 - **Cliente** `app/zapi.py`: `enviar_texto` (timeout; sucesso só com `messageId`/`zaapId`; nunca levanta). **Segurança:** o `instance_token` vai no PATH da URL e o `client_token` no header — `_redigir` remove os tokens de qualquer `detalhe`/log; o HUD nunca re-renderiza os tokens (PasswordField, **branco-mantém**, badge "configurado").
 - **Envio agendado:** `flask enviar-alertas-zapi [--force] [--dry-run]` (`app/cli.py`). Pensado para um **cron de hora em hora**: auto-restringe por `hora_envio` (hora **local** — depende de `TZ`), `apenas_dias_uteis`, e trava anti-dup **por destinatário** (`EnvioZapi` `ok` com `data_referencia` = hoje → retry de falha parcial + dedup numa regra só). `--force` ignora os gates; `--dry-run` só imprime. O botão "Enviar teste" do HUD (`/integracoes/zapi/testar`, `tipo=teste`) faz o mesmo bypass para validar a config.
 - **Invariante preservada:** `EnvioZapi` guarda entrega + contagem do instante — nunca o status de férias (que continua derivado de `date.today()`).

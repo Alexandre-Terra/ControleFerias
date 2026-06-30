@@ -282,8 +282,9 @@ def enviar_alertas_zapi_command(force, dry_run):
             return
 
     itens = zapi_digest.coletar_itens(hoje, cfg)
-    mensagem = zapi_digest.montar_mensagem(cfg, itens, hoje)
-    total = len(itens)
+    marcos = zapi_digest.coletar_marcos(hoje, cfg)
+    mensagem = zapi_digest.montar_mensagem(cfg, itens, hoje, marcos=marcos)
+    total = len(itens) + len(marcos)
 
     if mensagem is None:
         click.echo(

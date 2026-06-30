@@ -8,9 +8,9 @@ sem quebrar como faria ``str.format``.
 import re
 from datetime import date
 
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload, selectinload
 
-from . import status
+from . import status, tempo
 from .models import Funcionario
 
 # Teto de linhas no resumo — WhatsApp/Z-API truncam mensagens muito longas
@@ -102,19 +102,52 @@ def coletar_itens(hoje, config):
     return itens
 
 
-def montar_mensagem(config, itens, hoje, forcar=False):
-    """Renderiza o resumo.
+def coletar_marcos(hoje, config):
+    """Marcos de tempo de serviço cujo dia de aviso é hoje (ver app/tempo.py).
 
-    Retorna ``None`` quando não há itens e ``enviar_se_vazio`` está off — salvo
-    ``forcar=True`` (usado pelo "enviar teste", que sempre devolve uma mensagem).
+    Varre os funcionários ativos com data de admissão e devolve um item por
+    marco a avisar hoje (45/90/120 dias e aniversários), ordenado por data do
+    marco e nome. Vazio se ``notificar_tempo_servico`` estiver desligado.
+
+    Cada item: ``nome, empresa, setor, marco (label), data (dd/mm/aaaa),
+    dias`` (quantos faltam para o marco — 0 no dia do próprio marco).
     """
-    data_str = hoje.strftime("%d/%m/%Y")
+    if not config.notificar_tempo_servico:
+        return []
 
-    if not itens:
-        if not config.enviar_se_vazio and not forcar:
-            return None
-        return _render(config.modelo_sem_pendencias, {"data": data_str})
+    funcionarios = (
+        Funcionario.query.filter(
+            Funcionario.ativo.is_(True),
+            Funcionario.data_admissao.isnot(None),
+        )
+        .options(
+            joinedload(Funcionario.empresa),
+            joinedload(Funcionario.setor),
+        )
+        .all()
+    )
 
+    itens = []
+    for f in funcionarios:
+        for mk in tempo.alertas_do_dia(f.data_admissao, hoje):
+            itens.append(
+                {
+                    "nome": f.nome,
+                    "empresa": f.empresa.nome if f.empresa else "",
+                    "setor": f.setor.nome if f.setor else "—",
+                    "marco": mk["label"],
+                    "data": mk["data"].strftime("%d/%m/%Y"),
+                    "dias": mk["dias_faltam"],
+                    "_ord": (mk["data"], f.nome),
+                }
+            )
+
+    itens.sort(key=lambda it: it["_ord"])
+    return itens
+
+
+def _secao_ferias(config, itens, data_str):
+    """Cabeçalho + linhas do bloco de férias (assume ``itens`` não vazio)."""
     visiveis = itens[:MAX_LINHAS]
     linhas = [
         _render(
@@ -133,9 +166,59 @@ def montar_mensagem(config, itens, hoje, forcar=False):
     corpo = "\n".join(linhas)
     if len(itens) > MAX_LINHAS:
         corpo += f"\n…e mais {len(itens) - MAX_LINHAS}."
-
     cabecalho = _render(
         config.modelo_cabecalho, {"data": data_str, "total": len(itens)}
     )
-    # Garante separação cabeçalho/corpo mesmo se o admin editar o modelo.
     return f"{cabecalho.rstrip(chr(10))}\n{corpo}"
+
+
+def _secao_marcos(config, marcos, data_str):
+    """Cabeçalho + linhas do bloco de tempo de serviço (assume não vazio)."""
+    visiveis = marcos[:MAX_LINHAS]
+    linhas = [
+        _render(
+            config.modelo_tempo,
+            {
+                "nome": mk["nome"],
+                "empresa": mk["empresa"],
+                "setor": mk["setor"],
+                "marco": mk["marco"],
+                "data": mk["data"],
+                "dias": mk["dias"],
+            },
+        )
+        for mk in visiveis
+    ]
+    corpo = "\n".join(linhas)
+    if len(marcos) > MAX_LINHAS:
+        corpo += f"\n…e mais {len(marcos) - MAX_LINHAS}."
+    cabecalho = _render(
+        config.modelo_tempo_cabecalho, {"data": data_str, "total": len(marcos)}
+    )
+    return f"{cabecalho.rstrip(chr(10))}\n{corpo}"
+
+
+def montar_mensagem(config, itens, hoje, marcos=None, forcar=False):
+    """Renderiza o resumo: bloco de férias e/ou bloco de tempo de serviço.
+
+    Os dois blocos são independentes — pode vir só um, ambos (separados por
+    linha em branco) ou nenhum. Retorna ``None`` quando não há nada a enviar e
+    ``enviar_se_vazio`` está off — salvo ``forcar=True`` (usado pelo "enviar
+    teste", que sempre devolve uma mensagem).
+    """
+    marcos = marcos or []
+    data_str = hoje.strftime("%d/%m/%Y")
+
+    partes = []
+    if itens:
+        partes.append(_secao_ferias(config, itens, data_str))
+    if marcos:
+        partes.append(_secao_marcos(config, marcos, data_str))
+
+    if partes:
+        return "\n\n".join(partes)
+
+    # Nada a avisar (sem férias e sem marcos).
+    if not config.enviar_se_vazio and not forcar:
+        return None
+    return _render(config.modelo_sem_pendencias, {"data": data_str})

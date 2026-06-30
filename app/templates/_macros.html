@@ -55,6 +55,7 @@
   {% set items = [
     ('dashboard.index', 'Painel', 'grid', bp == 'dashboard', false),
     ('funcionarios.listar', 'Funcionários', 'users', bp in ['funcionarios', 'programacao'], false),
+    ('tempo.index', 'Tempo Funcionários', 'hourglass', bp == 'tempo', true),
     ('setores.listar', 'Setores', 'building', bp == 'setores', true),
     ('gestores.listar', 'Gestores', 'shield', bp == 'gestores', true),
     ('integracoes.zapi_config', 'WhatsApp', 'messageCircle', bp == 'integracoes', true)
