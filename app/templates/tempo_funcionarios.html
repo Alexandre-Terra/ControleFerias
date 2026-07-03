@@ -45,13 +45,42 @@
     </div>
   </div>
 
+  {# ---- filtros (GET) — atuam só na tabela abaixo ---- #}
+  <form method="get" class="reveal r3 panel" style="padding:16px;display:grid;grid-template-columns:1.6fr 1fr 1fr auto;gap:12px;align-items:end">
+    <div>
+      <label class="lbl">Busca (nome / código)</label>
+      <div style="position:relative">
+        <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--ink-3)">{{ m.icon('search', 16) }}</span>
+        <input class="field" style="padding-left:34px" name="busca" value="{{ filtros.busca }}" placeholder="Ex: Maria, 1042">
+      </div>
+    </div>
+    <div>
+      <label class="lbl">Setor</label>
+      <select class="field" name="setor">
+        <option value="">Todos</option>
+        {% for s in setores %}<option value="{{ s.id }}" {{ 'selected' if filtros.setor == s.id }}>{{ s.nome }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="lbl">Próximo marco</label>
+      <select class="field" name="marco">
+        <option value="">Todos</option>
+        {% for val, lbl in marco_opcoes %}<option value="{{ val }}" {{ 'selected' if filtros.marco == val }}>{{ lbl }}</option>{% endfor %}
+      </select>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" type="submit" style="height:42px">Filtrar</button>
+      <a class="btn btn-ghost" href="{{ url_for('tempo.index') }}" style="height:42px">{{ m.icon('x', 15) }} Limpar</a>
+    </div>
+  </form>
+
   {# ---- Tabela: tempo de casa + próximo marco ---- #}
-  <div class="reveal r3" style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px">
+  <div class="reveal r4" style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px">
     <div class="eyebrow">Colaboradores · próximo marco</div>
-    <div style="color:var(--ink-3);font-size:12.5px">{{ linhas | length }} com admissão{% if sem_admissao %} · {{ sem_admissao }} sem data de admissão{% endif %}</div>
+    <div style="color:var(--ink-3);font-size:12.5px">{{ linhas | length }} de {{ total_com_admissao }} com admissão{% if sem_admissao %} · {{ sem_admissao }} sem data de admissão{% endif %}</div>
   </div>
 
-  <div class="reveal r3 panel" style="overflow:hidden">
+  <div class="reveal r4 panel" style="overflow:hidden">
     <div style="display:grid;grid-template-columns:minmax(0,2fr) 1.1fr 1fr 1.2fr 1.3fr .9fr;gap:14px;padding:13px 20px;border-bottom:1px solid var(--line);background:var(--surface-2)">
       {% for h in ['Colaborador', 'Empresa', 'Admissão', 'Tempo de casa', 'Próximo marco', 'Faltam'] %}<div class="eyebrow" style="font-size:10.5px">{{ h }}</div>{% endfor %}
     </div>
@@ -83,7 +112,7 @@
       {% endif %}
     </a>
     {% else %}
-    <div style="padding:40px;text-align:center;color:var(--ink-3)">Nenhum colaborador com data de admissão.</div>
+    <div style="padding:40px;text-align:center;color:var(--ink-3)">Nenhum colaborador encontrado.</div>
     {% endfor %}
   </div>
 
