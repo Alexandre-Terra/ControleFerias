@@ -54,7 +54,12 @@ class LoginForm(FlaskForm):
 
 
 class ProgramacaoForm(FlaskForm):
-    periodo_id = SelectField("Período aquisitivo", coerce=int,
+    # coerce=str: o value é o id do período OU o token "v:<início ISO>" de uma
+    # janela virtual ainda sem linha no banco. validate_choice=False porque a
+    # janela pode ter sido materializada entre o GET e o POST (o value muda de
+    # token para id) — quem valida é _resolver_periodo, no servidor.
+    periodo_id = SelectField("Período aquisitivo", coerce=str,
+                             validate_choice=False,
                              validators=[DataRequired()])
     # InputRequired (não DataRequired): DataRequired apagaria o erro de parse
     # do CampoDataBR quando a data é inválida e o substituiria pela mensagem

@@ -77,7 +77,7 @@
       </div>
       <div style="font-size:13px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ l.f.empresa.nome if l.f.empresa else '—' }}</div>
       <div style="font-size:13px;color:var(--ink-2)">{{ l.f.setor.nome if l.f.setor else '—' }}</div>
-      <div class="tnum" style="font-size:14px;font-weight:700">{{ '%g'|format(l.restantes) if l.restantes else '—' }}</div>
+      <div class="tnum" style="font-size:14px;font-weight:700">{{ '%g'|format(l.restantes) if l.restantes is not none else '—' }}</div>
       <div class="tnum" style="font-size:12.5px;color:var(--ink-2)">
         {% if l.dias is none %}—{% elif l.dias < 0 %}<span style="color:var(--risk);font-weight:700">{{ -l.dias }}d atraso</span>{% else %}{{ l.dias }}d{% endif %}
       </div>

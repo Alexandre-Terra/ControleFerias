@@ -1,7 +1,17 @@
 """Application factory."""
+import os
+import time
 from datetime import date
 
-from flask import Flask
+# Todo o domínio deriva de date.today(); garante o fuso local mesmo quando o
+# container roda UTC e ninguém setou TZ no painel (Railway). A var do painel,
+# se existir, prevalece (setdefault). Vale para web, CLI e cron — todos
+# importam este pacote antes de qualquer date.today().
+os.environ.setdefault("TZ", "America/Sao_Paulo")
+if hasattr(time, "tzset"):  # tzset não existe no Windows (dev)
+    time.tzset()
+
+from flask import Flask  # noqa: E402
 from flask_migrate import Migrate
 from flask_wtf.csrf import CSRFProtect
 

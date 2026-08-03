@@ -111,7 +111,12 @@ class PeriodoAquisitivo(db.Model):
     inicio = db.Column(db.Date, nullable=False)          # Q - início aquisitivo
     fim = db.Column(db.Date, nullable=True)              # R - fim aquisitivo
     dias_direito = db.Column(db.Float, nullable=True)    # AC
-    dias_restantes = db.Column(db.Float, nullable=True)  # AG
+    # AG da planilha NA DATA-RETRATO (snapshot_em) — nunca mutado pelo app.
+    # O saldo atual é sempre derivado: ver base_periodo/saldo_periodo em status.py.
+    saldo_snapshot = db.Column(db.Float, nullable=True)  # AG
+    # Data-retrato da planilha que gravou saldo_snapshot. NULL = período criado
+    # pelo app (regime 100% derivado, direito integral de 30 dias ao fechar).
+    snapshot_em = db.Column(db.Date, nullable=True)
     limite_gozo = db.Column(db.Date, nullable=True)      # AH - fim do concessivo
     dias_abono = db.Column(db.Float, nullable=True)      # Z  (preservado)
     decimo_terceiro = db.Column(db.String(40), nullable=True)  # AB (preservado)

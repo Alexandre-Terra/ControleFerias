@@ -75,14 +75,15 @@
     <div style="display:grid;grid-template-columns:1fr 1fr .7fr .8fr 1fr auto;gap:12px;padding:0 0 11px;border-bottom:1px solid var(--line)">
       {% for h in ['Início', 'Fim', 'Direito', 'Restantes', 'Limite p/ gozo', 'Status'] %}<div class="eyebrow" style="font-size:10px">{{ h }}</div>{% endfor %}
     </div>
-    {% for p, s in periodos %}
+    {% for linha in periodos %}
+    {% set p = linha.p %}
     <div style="display:grid;grid-template-columns:1fr 1fr .7fr .8fr 1fr auto;gap:12px;padding:13px 0;align-items:center;{{ 'border-top:1px solid var(--line)' if not loop.first }}">
-      <div class="tnum" style="font-size:13.5px">{{ p.inicio.strftime('%d/%m/%Y') }}</div>
+      <div class="tnum" style="font-size:13.5px">{{ p.inicio.strftime('%d/%m/%Y') }}{% if linha.virtual %} <span class="mono" style="font-size:10px;color:var(--ink-3)">previsto</span>{% endif %}</div>
       <div class="tnum" style="font-size:13.5px">{{ p.fim.strftime('%d/%m/%Y') if p.fim else '—' }}</div>
-      <div class="tnum" style="font-size:13.5px;color:var(--ink-2)">{{ '%g'|format(p.dias_direito) if p.dias_direito is not none else '—' }}</div>
-      <div class="tnum" style="font-size:13.5px;font-weight:700">{{ '%g'|format(p.dias_restantes) if p.dias_restantes is not none else '—' }}</div>
+      <div class="tnum" style="font-size:13.5px;color:var(--ink-2)">{{ '%g'|format(linha.direito) if linha.direito is not none else '—' }}</div>
+      <div class="tnum" style="font-size:13.5px;font-weight:700">{{ '%g'|format(linha.saldo) }}</div>
       <div class="tnum" style="font-size:13.5px">{{ p.limite_gozo.strftime('%d/%m/%Y') if p.limite_gozo else '—' }}</div>
-      {{ m.status_pill(s) }}
+      {{ m.status_pill(linha.status) }}
     </div>
     {% else %}
     <div style="color:var(--ink-3);font-size:13.5px;padding:8px 0">Nenhum período aquisitivo registrado.</div>

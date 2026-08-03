@@ -36,7 +36,8 @@ def _periodo_elegivel(f, saldo=20):
         inicio=hoje - timedelta(days=400),
         fim=hoje - timedelta(days=35),
         dias_direito=30,
-        dias_restantes=saldo,
+        saldo_snapshot=saldo,
+        snapshot_em=hoje,
         limite_gozo=hoje + timedelta(days=200),
     )
     db.session.add(p)
@@ -53,7 +54,8 @@ def _periodo_a_vencer(f, saldo=20):
         inicio=hoje - timedelta(days=400),
         fim=hoje - timedelta(days=35),
         dias_direito=30,
-        dias_restantes=saldo,
+        saldo_snapshot=saldo,
+        snapshot_em=hoje,
         limite_gozo=hoje + timedelta(days=30),
     )
     db.session.add(p)

@@ -13,6 +13,9 @@ from app.importer import (
 from app.models import Funcionario, PeriodoAquisitivo, ProgramacaoFerias, db
 
 
+REF = date(2026, 5, 27)  # data-retrato usada nos imports dos testes
+
+
 def serial(d):
     return (d - EXCEL_EPOCH).days
 
@@ -67,7 +70,7 @@ def _planilha(tmp_path):
 
 def test_import_multilinha_e_conversoes(app, tmp_path):
     caminho = _planilha(tmp_path)
-    rel = importar_xlsx(str(caminho))
+    rel = importar_xlsx(str(caminho), REF)
 
     assert rel["empresas"]["novos"] == 1
     assert rel["funcionarios"]["novos"] == 1
@@ -82,12 +85,13 @@ def test_import_multilinha_e_conversoes(app, tmp_path):
 
     p2 = PeriodoAquisitivo.query.filter_by(inicio=date(2025, 10, 1)).one()
     assert p2.dias_direito == 7.5  # vírgula convertida
+    assert p2.snapshot_em == REF   # data-retrato gravada em todo período
 
 
 def test_import_nao_cria_programacoes(app, tmp_path):
     # As colunas W/X da planilha são ignoradas: programação nasce só no app.
     caminho = _planilha(tmp_path)
-    rel = importar_xlsx(str(caminho))
+    rel = importar_xlsx(str(caminho), REF)
 
     assert "programacoes" not in rel
     assert ProgramacaoFerias.query.count() == 0
@@ -95,8 +99,8 @@ def test_import_nao_cria_programacoes(app, tmp_path):
 
 def test_import_idempotente(app, tmp_path):
     caminho = _planilha(tmp_path)
-    importar_xlsx(str(caminho))
-    rel = importar_xlsx(str(caminho))  # segunda vez não cria/atualiza nada
+    importar_xlsx(str(caminho), REF)
+    rel = importar_xlsx(str(caminho), REF)  # segunda vez não cria/atualiza nada
 
     for ent, esperado_inalterado in [
         ("empresas", 1),
@@ -113,7 +117,7 @@ def test_import_idempotente(app, tmp_path):
 
 def test_dry_run_nao_persiste(app, tmp_path):
     caminho = _planilha(tmp_path)
-    rel = importar_xlsx(str(caminho), dry_run=True)
+    rel = importar_xlsx(str(caminho), REF, dry_run=True)
 
     assert rel["dry_run"] is True
     assert rel["funcionarios"]["novos"] == 1
@@ -132,7 +136,7 @@ def test_avisos_de_divergencia(app, tmp_path):
     def put(row, key, value):
         ws.cell(row=row, column=COL[key], value=value)
 
-    # Linha 8: dias_restantes > dias_direito.
+    # Linha 8: saldo_snapshot > dias_direito.
     put(8, "codigo", 7)
     put(8, "nome", "FULANO DA SILVA")
     put(8, "q_inicio", serial(date(2023, 1, 1)))
@@ -144,7 +148,28 @@ def test_avisos_de_divergencia(app, tmp_path):
     caminho = tmp_path / "div.xlsx"
     wb.save(caminho)
 
-    rel = importar_xlsx(str(caminho), dry_run=True)
+    rel = importar_xlsx(str(caminho), REF, dry_run=True)
 
     assert len(rel["avisos"]) == 1
-    assert "dias_restantes" in rel["avisos"][0]
+    assert "saldo_snapshot" in rel["avisos"][0]
+
+
+def test_reimport_avisa_programacoes_do_app(app, tmp_path):
+    # Re-import por cima de período já consumido no app → aviso de possível
+    # dupla contagem (o débito do app mora nas programações, não na planilha).
+    caminho = _planilha(tmp_path)
+    importar_xlsx(str(caminho), REF)
+
+    p = PeriodoAquisitivo.query.filter_by(inicio=date(2024, 10, 1)).one()
+    db.session.add(ProgramacaoFerias(
+        funcionario_id=p.funcionario_id,
+        periodo_aquisitivo_id=p.id,
+        data_inicio=date(2026, 8, 1),
+        dias_gozo=5,
+        data_fim=date(2026, 8, 5),
+        origem="manual",
+    ))
+    db.session.commit()
+
+    rel = importar_xlsx(str(caminho), REF, dry_run=True)
+    assert any("dupla" in a for a in rel["avisos"])

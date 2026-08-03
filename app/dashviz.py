@@ -39,7 +39,7 @@ def dias_para_limite(funcionario, hoje, dav):
     """
     lims = [
         (p.limite_gozo - hoje).days
-        for p, s in st.periodos_com_status(funcionario, hoje, dav)
+        for p, s, _saldo in st.periodos_com_status(funcionario, hoje, dav)
         if s in (st.VENCIDA, st.A_VENCER, st.TEM_DIREITO) and p.limite_gozo
     ]
     return min(lims) if lims else None
@@ -153,7 +153,7 @@ def _heatmap(funcionarios, hoje, dav):
     for f in funcionarios:
         if f.empresa:
             empresas.setdefault(f.empresa.id, f.empresa)
-        for p, s in st.periodos_com_status(f, hoje, dav):
+        for p, s, _saldo in st.periodos_com_status(f, hoje, dav):
             if s in (st.VENCIDA, st.A_VENCER, st.TEM_DIREITO) and p.limite_gozo:
                 d = (p.limite_gozo - hoje).days
                 prazos.append((f.empresa_id, d, p.limite_gozo.year, p.limite_gozo.month))
@@ -218,7 +218,7 @@ def _trend(funcionarios, hoje):
 def _proximos(funcionarios, hoje, dav, limite=5):
     out = []
     for f in funcionarios:
-        for p, s in st.periodos_com_status(f, hoje, dav):
+        for p, s, _saldo in st.periodos_com_status(f, hoje, dav):
             if s in (st.VENCIDA, st.A_VENCER, st.TEM_DIREITO) and p.limite_gozo:
                 dias = (p.limite_gozo - hoje).days
                 if dias >= 0:

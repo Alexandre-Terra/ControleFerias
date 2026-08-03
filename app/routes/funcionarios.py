@@ -58,11 +58,15 @@ def listar():
     for f in funcionarios:
         agregado = st.status_funcionario(f, hoje, dav)
         chip_counts[agregado] += 1
-        restantes = sum(
-            (p.dias_restantes or 0)
-            for p, s in st.periodos_com_status(f, hoje, dav)
-            if s in (st.TEM_DIREITO, st.A_VENCER, st.VENCIDA)
-        )
+        # "Dias disp." = saldo derivado de TODOS os períodos fechados — um
+        # período com programação parcial (PROGRAMADA) entra com o resíduo,
+        # quitado entra com 0. None (→ "—") só sem período fechado nenhum.
+        fechados = [
+            saldo
+            for p, _s, saldo in st.periodos_com_status(f, hoje, dav)
+            if p.fim and p.fim <= hoje
+        ]
+        restantes = sum(fechados) if fechados else None
         todas.append({
             "f": f,
             "status": agregado,
@@ -173,7 +177,16 @@ def detalhe(func_id):
     if not current_user().pode_gerir(f):
         abort(403)
 
-    periodos = st.periodos_com_status(f, hoje, dav)
+    periodos = [
+        {
+            "p": p,
+            "status": s,
+            "saldo": saldo,
+            "direito": st.direito_periodo(p, hoje),
+            "virtual": p.id is None,
+        }
+        for p, s, saldo in st.periodos_com_status(f, hoje, dav)
+    ]
     return render_template(
         "funcionario_detail.html",
         f=f,

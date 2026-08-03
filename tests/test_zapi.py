@@ -12,6 +12,7 @@ from app.models import (
     EnvioZapi,
     Funcionario,
     PeriodoAquisitivo,
+    ProgramacaoFerias,
     db,
 )
 
@@ -39,7 +40,10 @@ def _funcionario(empresa, nome, codigo, *, fim, limite, restantes=30.0):
             inicio=(fim or HOJE) - timedelta(days=365),
             fim=fim,
             dias_direito=30,
-            dias_restantes=restantes,
+            saldo_snapshot=restantes,
+            # Fechados entram no regime snapshot (base = AG); o aberto segue
+            # derivado (em formacao) — como na base real.
+            snapshot_em=HOJE,
             limite_gozo=limite,
         )
     )
@@ -395,3 +399,40 @@ def test_quando_local_converte_e_aceita_none(app):
     s = _quando_local(datetime(2026, 6, 23, 11, 0, 0))  # naive UTC
     assert "/" in s and ":" in s
     assert _quando_local(None) == "—"
+
+
+def test_coletar_itens_usa_saldo_derivado(empresa):
+    # Período que fechou DEPOIS do retrato (AG congelado 27,5) e com 10 dias
+    # já gozados via app: o resumo tem de dizer 20 (30 − 10) — nem o valor
+    # congelado, nem os 30 cheios.
+    f = Funcionario(empresa=empresa, codigo="9", nome="Congelado", ativo=True)
+    db.session.add(f)
+    db.session.flush()
+    p = PeriodoAquisitivo(
+        funcionario=f,
+        inicio=HOJE - timedelta(days=394),
+        fim=HOJE - timedelta(days=30),
+        dias_direito=27.5,
+        saldo_snapshot=27.5,
+        snapshot_em=HOJE - timedelta(days=60),  # retrato ANTES de fechar
+        limite_gozo=HOJE + timedelta(days=300),
+    )
+    db.session.add(p)
+    db.session.flush()
+    db.session.add(ProgramacaoFerias(
+        funcionario_id=f.id,
+        periodo_aquisitivo_id=p.id,
+        data_inicio=HOJE - timedelta(days=25),
+        dias_gozo=10,
+        data_fim=HOJE - timedelta(days=16),
+        origem="manual",
+    ))
+    db.session.commit()
+
+    cfg = _config_pronta()
+    cfg.notificar_tem_direito = True
+    db.session.commit()
+
+    itens = zapi_digest.coletar_itens(HOJE, cfg)
+    item = next(it for it in itens if it["nome"] == "Congelado")
+    assert item["dias"] == "20"

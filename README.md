@@ -31,7 +31,7 @@ py -3.12 -m venv .venv          # 3.14 também funciona localmente (usa SQLite)
 pip install -r requirements-dev.txt
 copy .env.example .env          # ajuste SECRET_KEY
 flask db upgrade
-flask import-xlsx .\Controle_Ferias_Master_Geral.xlsx
+flask import-xlsx .\Controle_Ferias_Master_Geral.xlsx --data-referencia 27/05/2026
 flask criar-gestor --email admin@exemplo.com --nome "Admin" --admin
 flask run
 ```
@@ -41,10 +41,16 @@ acima. Pela tela **Gestores** (visível apenas para administradores), o admin
 cria os demais gestores.
 
 A planilha é apenas a **base inicial** de funcionários, períodos aquisitivos
-e saldos — programações de férias nascem exclusivamente dentro do app (as
-colunas de gozo da planilha são ignoradas). O re-import é idempotente, mas
-sobrescreve os saldos com os valores da planilha: evite re-importar depois
-que as férias passarem a ser programadas pelo app.
+e saldos na data-retrato — programações de férias nascem exclusivamente dentro
+do app (as colunas de gozo da planilha são ignoradas). O `--data-referencia`
+(obrigatório) é a data em que o AG foi calculado no Excel, não a data do
+comando. O saldo exibido é sempre **derivado**: período fechado depois do
+retrato vale 30 dias, menos o que foi programado no app; os períodos seguintes
+(janelas "previstas") aparecem sozinhos com o tempo, sem novo import. Re-import
+é idempotente e não apaga o consumo feito no app (que mora nas programações),
+mas **a planilha nova não pode já descontar férias registradas no app** — isso
+contaria em dobro. Após qualquer import, rode `flask verificar-saldos`
+(read-only) e confira o resumo; saldo negativo denuncia dupla contagem.
 
 ## Testes
 
@@ -87,7 +93,8 @@ disso vai em variável de ambiente: mora no banco.
    - `DATABASE_URL` = `${{ Postgres.DATABASE_URL }}` (referência ao plugin)
    - `SECRET_KEY` = uma chave aleatória forte
    - `FLASK_APP` = `app:create_app`
-   - `TZ` = `America/Sao_Paulo`
+   - `TZ` = `America/Sao_Paulo` (opcional — o app já assume esse fuso por
+     padrão; a var, se setada, prevalece)
    - `ALERTA_A_VENCER_DIAS` = `60` (opcional, padrão 60)
 4. Em **Settings → Networking**, clique **Generate Domain** para expor o serviço.
 5. A cada deploy, `flask db upgrade` cria/atualiza o schema (definido no
@@ -108,14 +115,14 @@ disso vai em variável de ambiente: mora no banco.
 
 7. **Dry-run** contra o Postgres do Railway (não grava — confere contagens e divergências):
    ```powershell
-   railway run flask import-xlsx ./Controle_Ferias_Master_Geral.xlsx --dry-run
+   railway run flask import-xlsx ./Controle_Ferias_Master_Geral.xlsx --data-referencia 27/05/2026 --dry-run
    ```
    Saída esperada com a planilha atual: 3 empresas, 80 funcionários, 113 períodos,
    1 programação, sem divergências.
 
 8. Import real (grava no Postgres remoto):
    ```powershell
-   railway run flask import-xlsx ./Controle_Ferias_Master_Geral.xlsx
+   railway run flask import-xlsx ./Controle_Ferias_Master_Geral.xlsx --data-referencia 27/05/2026
    ```
 
 9. Crie o primeiro administrador (uma única vez — **não** coloque no
@@ -136,9 +143,10 @@ app/
   __init__.py     factory, blueprints, globals de template
   config.py       env vars + normalização da DATABASE_URL
   models.py       Empresa, Setor, Funcionario, PeriodoAquisitivo, ProgramacaoFerias
-  status.py       lógica de status (funções puras)
+  status.py       lógica de status e saldo derivado (funções puras)
+  periodos.py     janelas aquisitivas virtuais (funções puras)
   importer.py     parsing do XLSX (multi-linha, serial→data, decimais)
-  cli.py          comandos: import-xlsx, seed-setores
+  cli.py          comandos: import-xlsx, verificar-saldos, seed-setores
   auth.py         login por email/senha (modelo Gestor) + decoradores
   forms.py        Flask-WTF (login, programação, gestor)
   routes/         dashboard, funcionarios, gestores, programacao

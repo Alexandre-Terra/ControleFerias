@@ -1,15 +1,28 @@
 """Comandos de linha de comando do Flask."""
 import re
-from datetime import datetime
+from datetime import date, datetime
 
 import click
 from flask import Blueprint, current_app
+from sqlalchemy.orm import joinedload, selectinload
+
 from werkzeug.security import generate_password_hash
 
+from . import status
 from .importer import importar_setores, importar_xlsx
-from .models import Gestor, Setor, db
+from .models import Funcionario, Gestor, Setor, db
 
 bp = Blueprint("cli", __name__, cli_group=None)
+
+
+def _parse_data_br(valor):
+    """dd/mm/aaaa (padrão do app) com fallback ISO; ``BadParameter`` se inválida."""
+    for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(valor, fmt).date()
+        except ValueError:
+            continue
+    raise click.BadParameter(f"data inválida ({valor!r}) — use o formato dd/mm/aaaa.")
 
 
 def _banco_alvo():
@@ -35,25 +48,36 @@ def _echo_unicode_seguro(texto):
 @bp.cli.command("import-xlsx")
 @click.argument("caminho")
 @click.option(
+    "--data-referencia",
+    required=True,
+    help=(
+        "Data-retrato da planilha (dd/mm/aaaa): quando o AG foi calculado no "
+        "Excel. Define o regime de saldo dos períodos — NÃO é a data de hoje."
+    ),
+)
+@click.option(
     "--dry-run",
     is_flag=True,
     help="Simula a importação (rollback ao final) e mostra divergências.",
 )
-def import_xlsx_command(caminho, dry_run):
+def import_xlsx_command(caminho, data_referencia, dry_run):
     """Importa a planilha (funcionários e períodos; programações nunca).
 
     Programações de férias nascem exclusivamente no app — a planilha é
-    apenas a base de funcionários, períodos aquisitivos e saldos.
+    apenas a base de funcionários, períodos aquisitivos e saldos na
+    data-retrato. O saldo atual é derivado (ver app/status.py).
     """
     from seeds.setores import seed_setores
+
+    data_ref = _parse_data_br(data_referencia)
 
     if not dry_run:
         seed_setores()
 
-    rel = importar_xlsx(caminho, dry_run=dry_run)
+    rel = importar_xlsx(caminho, data_ref, dry_run=dry_run)
 
     prefixo = "[DRY-RUN] " if dry_run else ""
-    click.echo(f"{prefixo}Resultado da importação:")
+    click.echo(f"{prefixo}Resultado da importação (retrato de {data_ref:%d/%m/%Y}):")
     for ent in ("empresas", "funcionarios", "periodos"):
         c = rel[ent]
         click.echo(
@@ -74,6 +98,80 @@ def import_xlsx_command(caminho, dry_run):
             "\nNada foi gravado (dry-run). "
             "Rode novamente sem --dry-run para persistir."
         )
+
+
+@bp.cli.command("verificar-saldos")
+@click.option(
+    "--data",
+    "data_str",
+    default=None,
+    help="Data de referência do cálculo (dd/mm/aaaa); padrão hoje.",
+)
+def verificar_saldos_command(data_str):
+    """Confere o saldo derivado por período — só leitura, nada é gravado.
+
+    Para cada funcionário ativo imprime período a período: regime (snapshot =
+    AG da planilha vale como está; derivado = 30 ao fechar / proporcional em
+    formação; virtual = janela ainda sem linha no banco), base, programado,
+    saldo e status. No final, o resumo dos períodos que sobem para 30 e das
+    janelas virtuais — instrumento de conferência antes/depois de deploy ou
+    de import.
+    """
+    hoje = _parse_data_br(data_str) if data_str else date.today()
+    dav = current_app.config["ALERTA_A_VENCER_DIAS"]
+    click.echo(f"Banco: {_banco_alvo()}")
+    click.echo(f"Referência: {hoje:%d/%m/%Y} (A vencer: limite em até {dav}d)\n")
+
+    funcionarios = (
+        Funcionario.query.filter(Funcionario.ativo.is_(True))
+        .options(
+            selectinload(Funcionario.periodos),
+            selectinload(Funcionario.programacoes),
+            joinedload(Funcionario.empresa),
+        )
+        .order_by(Funcionario.nome)
+        .all()
+    )
+
+    subiram, virtuais, negativos = [], 0, []
+    for f in funcionarios:
+        _echo_unicode_seguro(f"{f.nome} ({f.empresa.nome if f.empresa else '—'})")
+        for p, s, saldo in status.periodos_com_status(f, hoje, dav):
+            if p.id is None:
+                regime = "virtual"
+                virtuais += 1
+            elif status.fechado_no_snapshot(p):
+                regime = "snapshot"
+            else:
+                regime = "derivado"
+                if p.fim and p.fim <= hoje and p.snapshot_em is not None:
+                    # Estava aberto no retrato e já fechou: é o caso que o
+                    # cálculo antigo congelava (ex.: 27,5 em vez de 30).
+                    subiram.append((f.nome, p))
+            if saldo < 0:
+                negativos.append((f.nome, p, saldo))
+            base = status.base_periodo(p, hoje)
+            programado = status.dias_programados(f, p)
+            fim = f"{p.fim:%d/%m/%Y}" if p.fim else "—"
+            _echo_unicode_seguro(
+                f"  {p.inicio:%d/%m/%Y} a {fim}  [{regime:8s}] "
+                f"base={base:g} programado={programado:g} saldo={saldo:g}  "
+                f"{status.LABELS[s]}"
+            )
+
+    click.echo("\nResumo:")
+    click.echo(f"  funcionarios ativos:          {len(funcionarios)}")
+    click.echo(f"  fechados pos-retrato (-> 30): {len(subiram)}")
+    click.echo(f"  janelas virtuais (sem linha): {virtuais}")
+    if negativos:
+        click.echo(
+            "\nATENCAO - saldo negativo (dados inconsistentes; provavel dupla "
+            "contagem entre planilha re-importada e programacoes do app):"
+        )
+        for nome, p, saldo in negativos:
+            _echo_unicode_seguro(
+                f"  {nome}: período {p.inicio:%d/%m/%Y} saldo={saldo:g}"
+            )
 
 
 @bp.cli.command("import-setores")

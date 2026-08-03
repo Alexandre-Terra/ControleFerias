@@ -29,9 +29,10 @@ copy .env.example .env          # ajusta SECRET_KEY
 # banco
 flask db upgrade                       # aplica migrations
 flask db migrate -m "mensagem"         # gera nova migration após mudar models.py
-flask import-xlsx .\Controle_Ferias_Master_Geral.xlsx
+flask import-xlsx .\Controle_Ferias_Master_Geral.xlsx --data-referencia 27/05/2026
 flask import-setores .\Controle_Ferias_Master_Geral.xlsx   # setores (coluna B)
 flask seed-setores
+flask verificar-saldos                 # confere o saldo derivado (read-only)
 
 # primeiro admin (uma vez por ambiente — não tem fallback de senha única)
 flask criar-gestor --email admin@exemplo.com --nome "Admin" --admin
@@ -53,7 +54,8 @@ app/
   __init__.py     factory; registra blueprints; injeta STATUS_LABELS/BADGE/hoje/current_user no Jinja
   config.py       env vars; normaliza DATABASE_URL do provedor (Railway/Render) para postgresql+psycopg://
   models.py       Gestor, Empresa, Setor, Funcionario, PeriodoAquisitivo, ProgramacaoFerias, ConfiguracaoZapi, EnvioZapi
-  status.py       lógica de status (funções puras, sem DB) — derivada de hoje; LABELS/CLASS/VAR
+  status.py       status E saldo derivados (funções puras, sem DB) — base_periodo/saldo_periodo; LABELS/CLASS/VAR
+  periodos.py     janelas aquisitivas virtuais (funções puras, sem DB) — periodos_efetivos/janelas_virtuais
   tempo.py        marcos de tempo de serviço (funções puras, sem DB) — 45/90/120 dias e aniversários a partir da data de admissão; dia de aviso por antecedência
   dashviz.py      agregações do painel (donut, timeline, heatmap, trend, risco) — consome status.py, NÃO importa db
   importer.py     parsing do XLSX (multi-linha por funcionário, serial→data, decimais)
@@ -61,7 +63,7 @@ app/
   zapi_digest.py  monta o resumo de férias (puro, reusa status.py); render seguro de modelos
   icons.py        ICONS: SVGs inline (set de ícones de linha do redesenho)
   uihelpers.py    iniciais() e avatar_cor() (avatar determinístico)
-  cli.py          comandos Flask: import-xlsx, import-setores, seed-setores, criar-gestor, bootstrap-admin, enviar-alertas-zapi
+  cli.py          comandos Flask: import-xlsx (--data-referencia), verificar-saldos, import-setores, seed-setores, criar-gestor, bootstrap-admin, enviar-alertas-zapi
   auth.py         login por email/senha (Gestor); helpers current_user, login_required, admin_required
   forms.py        Flask-WTF (Login, Programação, Gestor, MudarSenha, ConfiguracaoZapi)
   routes/         dashboard, funcionarios, tempo (Tempo Funcionários, admin-only), gestores, programacao, setores, configuracoes (conta do gestor), integracoes (HUD Z-API/WhatsApp, admin)
@@ -72,21 +74,40 @@ seeds/setores.py  setores padrão
 tests/            test_status.py, test_importer.py, test_programacao.py, test_auth.py, test_gestores.py, test_zapi.py, conftest.py
 ```
 
-## Regras de domínio (CLT) — ler antes de mexer em status/programação
+## Regras de domínio (CLT) — ler antes de mexer em status/programação/saldo
 
+**O saldo é DERIVADO, nunca armazenado**: `saldo = base_periodo − dias_programados`
+(`app/status.py`). A coluna `PeriodoAquisitivo.saldo_snapshot` (ex-`dias_restantes`)
+é o AG da planilha na data-retrato (`snapshot_em`) e **nunca é mutada pelo app**.
+
+- **base_periodo**, dois regimes por período:
+  - fechado na data-retrato (`fim <= snapshot_em`): base = `saldo_snapshot` — o AG
+    embute férias gozadas antes do app;
+  - qualquer outro (aberto no retrato, ou criado pelo app com `snapshot_em` nulo):
+    **30 dias ao fechar** (art. 130, caput; faltas fora de escopo) e acúmulo
+    proporcional de 2,5/mês completado enquanto em formação.
+- **Programações consomem saldo enquanto a linha existir** — programar cria a linha
+  (débito implícito), cancelar apaga (devolução implícita). Nada de mutar coluna.
+- **Janelas virtuais** (`app/periodos.py`): os períodos seguintes ao último do banco
+  são derivados de hoje (12 meses sucessivos; `limite_gozo` = fim + 12 meses) e só
+  viram linha quando o usuário programa contra eles (materialização on-demand em
+  `routes/programacao`, `snapshot_em` nulo). Funcionário sem período nenhum ancora
+  na `data_admissao`; inativo não gera; período com `fim` nulo suspende a geração.
 - **Período aquisitivo**: 12 meses; ao fechar (fim ≤ hoje), nasce o direito a férias.
-- **Tem direito**: período aquisitivo fechado **E** `dias_restantes > 0`.
+- **Tem direito**: período aquisitivo fechado **E** saldo derivado > 0.
 - **A vencer**: faltam ≤ `ALERTA_A_VENCER_DIAS` (padrão 60) para o `limite_gozo` (fim do concessivo).
 - **Vencida**: passou do `limite_gozo` com saldo > 0 → risco de pagamento em dobro.
 - **Programada**: existe `ProgramacaoFerias` ligada ao período cujo fim ≥ hoje.
 - **Em formação**: período ainda não fechou (fim no futuro ou nulo).
-- **Quitada**: período fechado com `dias_restantes <= 0`.
+- **Quitada**: período fechado com saldo derivado <= 0.
+- Na lista, **"Dias disp."** = soma do saldo derivado de todos os períodos fechados
+  (programação parcial entra com o resíduo; quitado soma 0; "—" só sem período fechado).
 
 Precedência (pior caso primeiro): `VENCIDA > A_VENCER > TEM_DIREITO > PROGRAMADA > EM_FORMACAO > QUITADA`. Ver `app/status.py`.
 
 - **Aviso prévio de 30 dias** (`AVISO_PREVIO_DIAS` em `routes/programacao.py`): exigido na programação manual para gestores comuns. **Admin é isento** — pode programar a partir de hoje; datas no passado continuam bloqueadas para todos.
 
-**Invariante crítico:** o status **nunca é persistido**. É sempre recalculado a partir de `date.today()`. Não adicionar colunas de status nos modelos.
+**Invariante crítico:** status e saldo **nunca são persistidos**. São sempre recalculados a partir de `date.today()`. Não adicionar coluna de status nem mutar `saldo_snapshot` nos modelos.
 
 ## Integração WhatsApp (Z-API)
 
@@ -121,13 +142,14 @@ Aviso ativo de férias por WhatsApp, **todo configurável pelo admin** no HUD `/
 - `railway.toml` define builder Railpack e `startCommand` (`flask db upgrade && flask bootstrap-admin && gunicorn ...`).
 - `Procfile` espelha o `startCommand` para compatibilidade com qualquer detecção alternativa.
 - Postgres é um **plugin separado** no mesmo projeto Railway — vincular via `DATABASE_URL=${{ Postgres.DATABASE_URL }}` no painel de Variables do serviço web.
-- Variáveis a configurar manualmente no painel: `DATABASE_URL`, `SECRET_KEY`, `FLASK_APP=app:create_app`, `TZ=America/Sao_Paulo`, `ALERTA_A_VENCER_DIAS` (opcional), `ADMIN_EMAIL` + `ADMIN_SENHA` (+ `ADMIN_NOME` opcional) para o bootstrap do admin.
+- Variáveis a configurar manualmente no painel: `DATABASE_URL`, `SECRET_KEY`, `FLASK_APP=app:create_app`, `TZ=America/Sao_Paulo` (opcional — `app/__init__.py` já assume esse fuso por padrão; a var prevalece), `ALERTA_A_VENCER_DIAS` (opcional), `ADMIN_EMAIL` + `ADMIN_SENHA` (+ `ADMIN_NOME` opcional) para o bootstrap do admin.
 - Domínio público: **Settings → Networking → Generate Domain**.
 - `flask db upgrade` roda a cada deploy (parte do `startCommand`).
 - **Cron do WhatsApp (Z-API):** crie um **serviço de cron separado** (mesma imagem) com schedule **horário em UTC** (`0 * * * *`) e comando `flask enviar-alertas-zapi`. Esse serviço **não** roda `flask db upgrade` (quem migra é o web). Variáveis dele: `DATABASE_URL`, `SECRET_KEY` e **`TZ=America/Sao_Paulo`** (sem `TZ`, o gate de `hora_envio` roda em UTC). O comando se auto-restringe (hora/dia útil/anti-dup) → no máximo um envio/dia. A config (credenciais/regras/modelos) é feita no HUD `/integracoes/zapi`, não em env var. **Não** usar APScheduler in-process (gunicorn pode ter N workers → N agendadores → duplicação).
 - Import inicial via Railway CLI (planilha fica local — está no `.gitignore`):
-  - dry-run: `railway run flask import-xlsx ./Controle_Ferias_Master_Geral.xlsx --dry-run`
-  - real: `railway run flask import-xlsx ./Controle_Ferias_Master_Geral.xlsx`
+  - dry-run: `railway run flask import-xlsx ./Controle_Ferias_Master_Geral.xlsx --data-referencia 27/05/2026 --dry-run`
+  - real: `railway run flask import-xlsx ./Controle_Ferias_Master_Geral.xlsx --data-referencia 27/05/2026`
+  - conferência: `railway run flask verificar-saldos` (read-only) antes e depois
   - setores (depois do import acima, pois casa por empresa+código): `railway run flask import-setores ./Controle_Ferias_Master_Geral.xlsx --dry-run` e então sem `--dry-run`
 - Admin (bootstrap por ambiente): `flask bootstrap-admin` roda a cada deploy (parte do `startCommand`) e, a partir de `ADMIN_EMAIL`/`ADMIN_SENHA`, **cria** o admin se não existir e **ressincroniza** a senha + reativa/promove (`ativo`, `is_admin`) se já existir. É idempotente e seguro de manter no `startCommand`.
   - Sem `ADMIN_EMAIL`/`ADMIN_SENHA` no painel → o comando é no-op (não há fallback de senha fixa); a instância fica trancada até você configurá-las e refazer o deploy.
@@ -140,10 +162,10 @@ Aviso ativo de férias por WhatsApp, **todo configurável pelo admin** no HUD `/
 
 - **Setor por funcionário** vem da coluna B das abas de empresa via `flask import-setores` (texto livre mapeado para vocabulário canônico — `SETOR_CANONICO` no importer); também pode ser ajustado por edição inline. Funcionário sem setor na planilha fica "Não definido" (ex.: a aba `AMP Comercio`).
 - **CRUD admin (UI):** o admin pode criar/renomear/excluir **setores** (`/setores`, blueprint `setores`) e adicionar **funcionários** (`/funcionarios/novo`). Excluir setor é **bloqueado** se houver qualquer funcionário (ativo ou inativo) ou gestor associado — para corrigir nome, renomear. Empresa continua vindo só do importer (sem CRUD).
-- **Remover funcionário = inativar (soft-delete):** `Funcionario.ativo` (migration `63859db4e304`, backfill `server_default=true`). Inativo some das listas e do painel e bloqueia programação; admin reativa pelo detalhe (lista tem toggle admin `?inativos=1`). **Filtragem do `ativo` mora em exatamente 2 queries de lista** (`dashboard.index`, `funcionarios.listar`) — ao criar novos caminhos de query de `Funcionario`, lembrar de aplicar o filtro. Funcionário criado manualmente nasce sem períodos aquisitivos → aparece como "Em formação" (períodos só vêm do importer).
+- **Remover funcionário = inativar (soft-delete):** `Funcionario.ativo` (migration `63859db4e304`, backfill `server_default=true`). Inativo some das listas e do painel e bloqueia programação; admin reativa pelo detalhe (lista tem toggle admin `?inativos=1`). **Filtragem do `ativo` mora em exatamente 2 queries de lista** (`dashboard.index`, `funcionarios.listar`) — ao criar novos caminhos de query de `Funcionario`, lembrar de aplicar o filtro. Funcionário criado manualmente nasce sem linhas de período, mas a janela aquisitiva virtual ancora na `data_admissao` — ele acumula e ganha direito sozinho (sem admissão, nada aparece).
 - **Login** é por gestor identificado (email/senha). Sem reset por email. O gestor troca a **própria** senha em **Configurações** (`/configuracoes/senha`, exige a senha atual; entrada pela engrenagem no menu do usuário); o admin também reseta a de qualquer gestor via `/gestores/<id>/senha`. A senha do admin de `ADMIN_EMAIL` é recuperável trocando `ADMIN_SENHA` e refazendo o deploy (ver Deploy) — **atenção:** como ela é ressincronizada a cada deploy, se *esse* admin trocar a senha pela UI ela será sobrescrita pelo valor de `ADMIN_SENHA` no próximo deploy.
 - **Acesso por setor (não por empresa):** o filtro de visão é por **setor**, não por empresa — um gestor não-admin de "Produção" vê Produção em **todas** as empresas. Admin atribui o setor ao gestor no cadastro (`/gestores/novo`) ou em `/gestores/<id>/editar`. **Consequência da migration `a15c6bf0c3a1`:** todo gestor não-admin pré-existente fica com `setor_id = NULL` e **não vê nada** até um admin atribuir um setor — é o efeito esperado de exigir setor para não-admin, não um bug. Gestor não-admin sem setor → listas/painel vazios e 403 nos detalhes.
-- **Programações nascem só no app:** o importer ignora as colunas W/X da planilha e nunca cria nem remove `ProgramacaoFerias` (a migration `c7d1a9e4f2b8` apagou as antigas `origem=import`, devolvendo o saldo das não encerradas). A planilha é base apenas de funcionários, períodos e saldos. **Atenção:** re-importar sobrescreve `dias_restantes` com o AG da planilha — se houver férias programadas pelo app depois do último import, re-importar com planilha desatualizada restaura o saldo antigo por cima do consumo feito no app.
+- **Programações nascem só no app:** o importer ignora as colunas W/X da planilha e nunca cria nem remove `ProgramacaoFerias` (a migration `c7d1a9e4f2b8` apagou as antigas `origem=import`, devolvendo o saldo das não encerradas). A planilha é base apenas de funcionários, períodos e saldos. **Atenção:** re-importar sobrescreve `saldo_snapshot`/`snapshot_em` com a planilha, mas NÃO apaga o consumo do app (que mora nas linhas de `ProgramacaoFerias`). O risco restante é a planilha nova já descontar férias registradas no app → dupla contagem; rode `flask verificar-saldos` após qualquer import (saldo negativo denuncia).
 - **Abono, 13º, faltas** estão fora de escopo nesta versão — valores importados são exibidos mas não editáveis.
 
 ## Ao trabalhar aqui

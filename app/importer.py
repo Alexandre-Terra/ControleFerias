@@ -17,7 +17,14 @@ from datetime import date, datetime, timedelta
 
 from openpyxl import load_workbook
 
-from .models import Empresa, Funcionario, PeriodoAquisitivo, Setor, db
+from .models import (
+    Empresa,
+    Funcionario,
+    PeriodoAquisitivo,
+    ProgramacaoFerias,
+    Setor,
+    db,
+)
 
 EXCEL_EPOCH = date(1899, 12, 30)
 
@@ -42,7 +49,7 @@ COL = {
 
 CAMPOS_FUNC = ("nome", "data_admissao", "vencto_ferias")
 CAMPOS_PERIODO = (
-    "fim", "dias_direito", "dias_restantes", "limite_gozo",
+    "fim", "dias_direito", "saldo_snapshot", "snapshot_em", "limite_gozo",
     "dias_abono", "decimo_terceiro",
 )
 
@@ -158,16 +165,22 @@ def _validar_periodo(p, ref, avisos):
                 f"{ref}: limite_gozo {delta} dias após o fim ({p.fim} → "
                 f"{p.limite_gozo}); esperado ~365"
             )
-    if p.dias_direito is not None and p.dias_restantes is not None:
-        if p.dias_restantes > p.dias_direito:
+    if p.dias_direito is not None and p.saldo_snapshot is not None:
+        if p.saldo_snapshot > p.dias_direito:
             avisos.append(
-                f"{ref}: dias_restantes ({p.dias_restantes}) > "
+                f"{ref}: saldo_snapshot ({p.saldo_snapshot}) > "
                 f"dias_direito ({p.dias_direito})"
             )
 
 
-def importar_xlsx(caminho, dry_run=False):
+def importar_xlsx(caminho, data_referencia, dry_run=False):
     """Importa a planilha. Retorna relatório estruturado.
+
+    ``data_referencia`` é a data-retrato da planilha (quando os valores de AG
+    foram calculados no Excel) — vai para ``PeriodoAquisitivo.snapshot_em`` e
+    define o regime de saldo de cada período (ver ``app/status.py``). NÃO é a
+    data em que o comando roda: importar planilha antiga com a data de hoje
+    faria o app confiar num AG defasado.
 
     Quando ``dry_run=True``, dá rollback no final em vez de commit — os
     contadores e avisos refletem o que *seria* gravado.
@@ -238,7 +251,8 @@ def importar_xlsx(caminho, dry_run=False):
             antes_p = _snapshot(periodo, CAMPOS_PERIODO)
             periodo.fim = to_date(cell("r_fim"))
             periodo.dias_direito = to_float(cell("ac_direito"))
-            periodo.dias_restantes = to_float(cell("ag_restante"))
+            periodo.saldo_snapshot = to_float(cell("ag_restante"))
+            periodo.snapshot_em = data_referencia
             periodo.limite_gozo = to_date(cell("ah_limite"))
             periodo.dias_abono = to_float(cell("z_abono"))
             periodo.decimo_terceiro = _texto(cell("ab_13"))
@@ -246,6 +260,20 @@ def importar_xlsx(caminho, dry_run=False):
             depois_p = _snapshot(periodo, CAMPOS_PERIODO)
             registrar("periodos", novo_p, antes_p, depois_p)
             _validar_periodo(periodo, ref, avisos)
+            if not novo_p:
+                n_progs = ProgramacaoFerias.query.filter_by(
+                    periodo_aquisitivo_id=periodo.id
+                ).count()
+                if n_progs:
+                    # Re-import por cima de período que o app já consumiu: se o
+                    # AG da planilha também descontar essas férias, conta em
+                    # dobro (o débito do app mora nas programações).
+                    avisos.append(
+                        f"{ref}: período {periodo.inicio:%d/%m/%Y} já tem "
+                        f"{n_progs} programação(ões) registradas no app — se o "
+                        "AG da planilha já desconta essas férias, haverá dupla "
+                        "contagem; confira com flask verificar-saldos"
+                    )
 
     if dry_run:
         db.session.rollback()

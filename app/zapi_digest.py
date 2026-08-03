@@ -49,14 +49,18 @@ def _status_habilitados(config):
 
 
 def _periodo_representativo(funcionario, hoje, dias_a_vencer):
-    """Status agregado + o período mais urgente que o justifica (menor limite)."""
-    pares = status.periodos_com_status(funcionario, hoje, dias_a_vencer)
-    agregado = status.status_agregado([s for _, s in pares])
-    candidatos = [p for p, s in pares if s == agregado]
-    periodo = None
-    if candidatos:
-        periodo = min(candidatos, key=lambda p: p.limite_gozo or date.max)
-    return agregado, periodo
+    """Status agregado + o período mais urgente que o justifica (menor limite).
+
+    Devolve também o saldo derivado do período — é ele que vai na variável
+    ``{dias}`` do modelo, nunca a coluna congelada do banco.
+    """
+    triplas = status.periodos_com_status(funcionario, hoje, dias_a_vencer)
+    agregado = status.status_agregado([s for _, s, _ in triplas])
+    candidatos = [(p, saldo) for p, s, saldo in triplas if s == agregado]
+    if not candidatos:
+        return agregado, None, None
+    periodo, saldo = min(candidatos, key=lambda ps: ps[0].limite_gozo or date.max)
+    return agregado, periodo, saldo
 
 
 def coletar_itens(hoje, config):
@@ -80,7 +84,9 @@ def coletar_itens(hoje, config):
 
     itens = []
     for f in funcionarios:
-        agregado, periodo = _periodo_representativo(f, hoje, config.antecedencia_dias)
+        agregado, periodo, saldo = _periodo_representativo(
+            f, hoje, config.antecedencia_dias
+        )
         if agregado not in habilitados:
             continue
         limite = periodo.limite_gozo if periodo else None
@@ -91,7 +97,7 @@ def coletar_itens(hoje, config):
                 "setor": f.setor.nome if f.setor else "—",
                 "status": agregado,
                 "status_label": status.LABELS[agregado],
-                "dias": _fmt_dias(periodo.dias_restantes if periodo else None),
+                "dias": _fmt_dias(saldo if periodo else None),
                 "limite": limite.strftime("%d/%m/%Y") if limite else "—",
                 "_ord_limite": limite or date.max,
             }
