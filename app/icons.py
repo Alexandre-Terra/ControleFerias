@@ -22,6 +22,7 @@ ICONS = {
     "arrowUpRight": '<path d="M7 17 17 7M8.5 7H17v8.5"/>',
     "chevronDown": '<path d="M6 9.5 12 15.5 18 9.5"/>',
     "chevronRight": '<path d="M9.5 6 15.5 12 9.5 18"/>',
+    "chevronLeft": '<path d="M14.5 6 8.5 12 14.5 18"/>',
     "sun": '<circle cx="12" cy="12" r="4"/><path d="M12 2.6v2.4M12 19v2.4M2.6 12H5M19 12h2.4M5.4 5.4 7 7M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/>',
     "moon": '<path d="M20.5 13.2A8.4 8.4 0 1 1 10.8 3.5a6.6 6.6 0 0 0 9.7 9.7Z"/>',
     "panelLeft": '<rect x="3.2" y="4.4" width="17.6" height="15.2" rx="2.2"/><path d="M9.2 4.4v15.2"/>',

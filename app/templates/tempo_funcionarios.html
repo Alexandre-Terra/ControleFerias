@@ -3,6 +3,8 @@
 {% block title %}Tempo Funcionários · Controle de Férias{% endblock %}
 {% block page_title %}Tempo Funcionários{% endblock %}
 {% block content %}
+{% set grid_colab = 'minmax(0,1.8fr) 1.2fr 1.1fr 1.35fr 1.3fr .8fr' %}
+{% set grid_linha = '.9fr minmax(0,1.8fr) 1.2fr 1.2fr 1.2fr' %}
 <div style="display:grid;gap:20px">
 
   <div class="reveal r1" style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:4px">
@@ -14,7 +16,7 @@
     <span class="pill {{ 's-ok' if zapi_ativo else 's-idle' }}" style="flex:0 0 auto" title="Integração WhatsApp + marcos de tempo de serviço"><span class="dot"></span>{{ 'WhatsApp ativo' if zapi_ativo else 'WhatsApp inativo' }}</span>
   </div>
 
-  {# ---- Alertas de hoje (o que vai para o WhatsApp) ---- #}
+  {# ---- Alertas de hoje (o que vai para o WhatsApp — sem recorte de filtro) ---- #}
   <div class="reveal r2 panel" style="padding:0;overflow:hidden">
     <div style="height:5px;background:var(--{{ 'warn' if alertas_hoje else 'idle' }})"></div>
     <div style="padding:20px 24px;display:grid;gap:14px">
@@ -22,6 +24,7 @@
         {{ m.icon('bell', 18) }}
         <h3 class="display" style="font-size:18px">Avisos de hoje</h3>
         <span class="pill {{ 's-warn' if alertas_hoje else 's-idle' }}" style="font-size:11px;padding:3px 9px"><span class="dot"></span>{{ alertas_hoje | length }}</span>
+        <span style="color:var(--ink-3);font-size:12px">todos os colaboradores · não segue os filtros</span>
       </div>
       {% if alertas_hoje %}
       <div style="display:grid;gap:8px">
@@ -45,14 +48,27 @@
     </div>
   </div>
 
-  {# ---- filtros (GET) — atuam só na tabela abaixo ---- #}
-  <form method="get" class="reveal r3 panel" style="padding:16px;display:grid;grid-template-columns:1.6fr 1fr 1fr auto;gap:12px;align-items:end">
+  {# ---- filtros (GET) ---- #}
+  <form method="get" class="reveal r3 panel" style="padding:16px;display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr auto;gap:12px;align-items:end">
+    {# mês, vista, chips e "só no mês" são controlados por link — vão de carona
+       aqui para não se perderem ao submeter o formulário. #}
+    {% for mk in filtros.marco %}<input type="hidden" name="marco" value="{{ mk }}">{% endfor %}
+    <input type="hidden" name="mes" value="{{ filtros.mes }}">
+    {% if filtros.vista != 'colaborador' %}<input type="hidden" name="vista" value="{{ filtros.vista }}">{% endif %}
+    {% if filtros.no_mes %}<input type="hidden" name="no_mes" value="1">{% endif %}
     <div>
       <label class="lbl">Busca (nome / código)</label>
       <div style="position:relative">
         <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--ink-3)">{{ m.icon('search', 16) }}</span>
         <input class="field" style="padding-left:34px" name="busca" value="{{ filtros.busca }}" placeholder="Ex: Maria, 1042">
       </div>
+    </div>
+    <div>
+      <label class="lbl">Empresa</label>
+      <select class="field" name="empresa">
+        <option value="">Todas</option>
+        {% for e in empresas %}<option value="{{ e.id }}" {{ 'selected' if filtros.empresa == e.id }}>{{ e.nome }}</option>{% endfor %}
+      </select>
     </div>
     <div>
       <label class="lbl">Setor</label>
@@ -62,10 +78,10 @@
       </select>
     </div>
     <div>
-      <label class="lbl">Próximo marco</label>
-      <select class="field" name="marco">
+      <label class="lbl">Tempo de casa</label>
+      <select class="field" name="faixa">
         <option value="">Todos</option>
-        {% for val, lbl in marco_opcoes %}<option value="{{ val }}" {{ 'selected' if filtros.marco == val }}>{{ lbl }}</option>{% endfor %}
+        {% for slug, rotulo, _min, _max in faixas %}<option value="{{ slug }}" {{ 'selected' if filtros.faixa == slug }}>{{ rotulo }}</option>{% endfor %}
       </select>
     </div>
     <div style="display:flex;gap:8px">
@@ -74,18 +90,114 @@
     </div>
   </form>
 
-  {# ---- Tabela: tempo de casa + próximo marco ---- #}
+  {# ---- chips de tipo de marco (múltipla escolha) ---- #}
+  <div class="reveal r3" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <a class="chip {{ 'active' if not filtros.marco }}" href="{{ nav.limpar_marcos }}">Todos os marcos</a>
+    {% for chave, rotulo in marco_opcoes %}
+    <a class="chip {{ 'active' if chave in filtros.marco }}" href="{{ nav.marcos[chave] }}">{{ rotulo }}</a>
+    {% endfor %}
+    {% if vista == 'colaborador' %}
+    <a class="chip {{ 'active' if filtros.no_mes }}" href="{{ nav.no_mes }}" title="Restringe a tabela a quem tem marco no mês selecionado">{{ m.icon('calendar', 14) }} Só com marco no mês</a>
+    {% endif %}
+    <span style="color:var(--ink-3);font-size:12px;margin-left:2px">
+      {% if vista == 'linha' or filtros.no_mes %}filtra os marcos de {{ mes_label }}{% else %}filtra o próximo marco{% endif %}
+    </span>
+  </div>
+
+  {# ---- mês + vista ---- #}
+  <div class="reveal r3" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:8px">
+      <a class="btn btn-ghost btn-sm" href="{{ nav.mes_anterior }}" title="Mês anterior" aria-label="Mês anterior">{{ m.icon('chevronLeft', 15) }}</a>
+      <div class="display" style="font-size:17px;min-width:170px;text-align:center;text-transform:capitalize">{{ mes_label }}</div>
+      <a class="btn btn-ghost btn-sm" href="{{ nav.mes_seguinte }}" title="Próximo mês" aria-label="Próximo mês">{{ m.icon('chevronRight', 15) }}</a>
+      {% if not mes_corrente %}<a class="btn btn-ghost btn-sm" href="{{ nav.mes_hoje }}" style="margin-left:4px">Hoje</a>{% endif %}
+    </div>
+    <div class="seg" role="group" aria-label="Vista">
+      <a class="seg-btn {{ 'active' if vista == 'colaborador' }}" href="{{ nav.vistas['colaborador'] }}">{{ m.icon('users', 15) }} Por colaborador</a>
+      <a class="seg-btn {{ 'active' if vista == 'linha' }}" href="{{ nav.vistas['linha'] }}">{{ m.icon('list', 15) }} Linha do tempo</a>
+    </div>
+  </div>
+
+  {# ---- resumo do mês ---- #}
+  <div class="reveal r3 panel" style="padding:18px 22px;display:grid;gap:14px">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      {{ m.icon('hourglass', 17) }}
+      <h3 class="display" style="font-size:17px">Marcos de {{ mes_label }}</h3>
+      <span style="color:var(--ink-3);font-size:12px">segue os filtros acima</span>
+    </div>
+    <div style="display:flex;gap:26px;flex-wrap:wrap;align-items:flex-end">
+      <div>
+        <div class="tnum display" style="font-size:30px;line-height:1">{{ resumo.total }}</div>
+        <div class="eyebrow" style="font-size:10.5px;margin-top:4px">no mês</div>
+      </div>
+      <div>
+        <div class="tnum display" style="font-size:22px;line-height:1;color:var(--ink-2)">{{ resumo.batidos }}</div>
+        <div class="eyebrow" style="font-size:10.5px;margin-top:4px">já batidos</div>
+      </div>
+      <div>
+        <div class="tnum display" style="font-size:22px;line-height:1;color:var(--ink-2)">{{ resumo.a_bater }}</div>
+        <div class="eyebrow" style="font-size:10.5px;margin-top:4px">a bater</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-left:auto">
+        {% for chave, rotulo in marco_opcoes %}
+        <span class="pill {{ 's-info' if resumo.por_chave[chave].total else 's-idle' }}" style="font-size:11.5px"><span class="dot"></span>{{ rotulo }} <span class="tnum" style="font-weight:700">{{ resumo.por_chave[chave].total }}</span></span>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  {% if vista == 'linha' %}
+  {# ---- vista: linha do tempo (um marco por linha, batidos e a bater) ---- #}
   <div class="reveal r4" style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px">
-    <div class="eyebrow">Colaboradores · próximo marco</div>
+    <div class="eyebrow">Marcos do mês · em ordem de data</div>
+    <div style="color:var(--ink-3);font-size:12.5px">{{ eventos | length }} marco{{ '' if eventos | length == 1 else 's' }} em {{ mes_label }}</div>
+  </div>
+
+  <div class="reveal r4 panel" style="overflow:hidden">
+    <div style="display:grid;grid-template-columns:{{ grid_linha }};gap:14px;padding:13px 20px;border-bottom:1px solid var(--line);background:var(--surface-2)">
+      {% for h in ['Data', 'Colaborador', 'Empresa / Setor', 'Marco', 'Situação'] %}<div class="eyebrow" style="font-size:10.5px">{{ h }}</div>{% endfor %}
+    </div>
+    {% for e in eventos %}
+    <a href="{{ url_for('funcionarios.detalhe', func_id=e.f.id) }}" class="lrow" style="display:grid;grid-template-columns:{{ grid_linha }};gap:14px;padding:12px 20px;align-items:center;{{ 'border-top:1px solid var(--line)' if not loop.first }}">
+      <div class="tnum" style="font-size:12.5px;color:var(--ink-2)">{{ e.marco.data.strftime('%d/%m/%Y') }}</div>
+      <div style="display:flex;align-items:center;gap:11px;min-width:0">
+        {{ m.avatar(e.f.nome, 32) }}
+        <div style="min-width:0">
+          <div style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ e.f.nome }}</div>
+          <div class="mono" style="font-size:11px;color:var(--ink-3)">#{{ e.f.codigo }}</div>
+        </div>
+      </div>
+      <div style="min-width:0;font-size:13px">
+        <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ e.f.empresa.nome if e.f.empresa else '—' }}</div>
+        <div class="mono" style="font-size:11px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ e.f.setor.nome if e.f.setor else 'Não definido' }}</div>
+      </div>
+      <div>
+        <span class="pill {{ 's-warn' if e.marco.alertar_hoje else ('s-done' if e.marco.batido else 's-info') }}" style="font-size:11.5px"><span class="dot"></span>{{ e.marco.label }}</span>
+      </div>
+      <div class="tnum" style="font-size:12.5px;color:var(--ink-2)">
+        {% if e.marco.dias_faltam == 0 %}<span style="font-weight:700">hoje</span>
+        {% elif e.marco.batido %}batido há {{ -e.marco.dias_faltam }}d
+        {% else %}em {{ e.marco.dias_faltam }}d{% endif %}
+      </div>
+    </a>
+    {% else %}
+    <div style="padding:40px;text-align:center;color:var(--ink-3)">Nenhum marco em {{ mes_label }} com os filtros atuais.</div>
+    {% endfor %}
+  </div>
+
+  {% else %}
+  {# ---- vista: por colaborador (último e próximo marco) ---- #}
+  <div class="reveal r4" style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px">
+    <div class="eyebrow">Colaboradores · último e próximo marco</div>
     <div style="color:var(--ink-3);font-size:12.5px">{{ linhas | length }} de {{ total_com_admissao }} com admissão{% if sem_admissao %} · {{ sem_admissao }} sem data de admissão{% endif %}</div>
   </div>
 
   <div class="reveal r4 panel" style="overflow:hidden">
-    <div style="display:grid;grid-template-columns:minmax(0,2fr) 1.1fr 1fr 1.2fr 1.3fr .9fr;gap:14px;padding:13px 20px;border-bottom:1px solid var(--line);background:var(--surface-2)">
-      {% for h in ['Colaborador', 'Empresa', 'Admissão', 'Tempo de casa', 'Próximo marco', 'Faltam'] %}<div class="eyebrow" style="font-size:10.5px">{{ h }}</div>{% endfor %}
+    <div style="display:grid;grid-template-columns:{{ grid_colab }};gap:14px;padding:13px 20px;border-bottom:1px solid var(--line);background:var(--surface-2)">
+      {% for h in ['Colaborador', 'Empresa / Setor', 'Tempo de casa', 'Último marco', 'Próximo marco', 'Faltam'] %}<div class="eyebrow" style="font-size:10.5px">{{ h }}</div>{% endfor %}
     </div>
     {% for l in linhas %}
-    <a href="{{ url_for('funcionarios.detalhe', func_id=l.f.id) }}" class="lrow" style="display:grid;grid-template-columns:minmax(0,2fr) 1.1fr 1fr 1.2fr 1.3fr .9fr;gap:14px;padding:12px 20px;align-items:center;{{ 'border-top:1px solid var(--line)' if not loop.first }}">
+    <a href="{{ url_for('funcionarios.detalhe', func_id=l.f.id) }}" class="lrow" style="display:grid;grid-template-columns:{{ grid_colab }};gap:14px;padding:12px 20px;align-items:center;{{ 'border-top:1px solid var(--line)' if not loop.first }}">
       <div style="display:flex;align-items:center;gap:11px;min-width:0">
         {{ m.avatar(l.f.nome, 34) }}
         <div style="min-width:0">
@@ -93,28 +205,37 @@
           <div class="mono" style="font-size:11px;color:var(--ink-3)">#{{ l.f.codigo }}</div>
         </div>
       </div>
-      <div style="font-size:13px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ l.f.empresa.nome if l.f.empresa else '—' }}</div>
-      <div class="tnum" style="font-size:12.5px;color:var(--ink-2)">{{ l.f.data_admissao.strftime('%d/%m/%Y') }}</div>
-      <div style="font-size:13px;color:var(--ink-2)">{{ l.tempo_casa }}</div>
-      {% if l.proximo %}
-      <div style="display:flex;align-items:center;gap:8px;min-width:0">
+      <div style="min-width:0;font-size:13px">
+        <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ l.f.empresa.nome if l.f.empresa else '—' }}</div>
+        <div class="mono" style="font-size:11px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ l.f.setor.nome if l.f.setor else 'Não definido' }}</div>
+      </div>
+      <div style="font-size:13px;color:var(--ink-2)">
+        {{ l.tempo_casa }}
+        <div class="mono tnum" style="font-size:11px;color:var(--ink-3)">desde {{ l.f.data_admissao.strftime('%d/%m/%Y') }}</div>
+      </div>
+      <div style="min-width:0">
+        {% if l.ultimo %}
+        <span class="pill s-done" style="font-size:11.5px"><span class="dot"></span>{{ l.ultimo.label }}</span>
+        <div class="tnum" style="font-size:11px;color:var(--ink-3);margin-top:3px">{{ l.ultimo_ha }} · {{ l.ultimo.data.strftime('%d/%m/%Y') }}</div>
+        {% else %}
+        <span style="color:var(--ink-3);font-size:13px">nenhum ainda</span>
+        {% endif %}
+      </div>
+      <div style="min-width:0">
         <span class="pill {{ 's-warn' if l.proximo.alertar_hoje else 's-info' }}" style="font-size:11.5px"><span class="dot"></span>{{ l.proximo.label }}</span>
-        <span class="mono" style="font-size:11px;color:var(--ink-3)">{{ l.proximo.data.strftime('%d/%m/%Y') }}</span>
+        <div class="tnum mono" style="font-size:11px;color:var(--ink-3);margin-top:3px">{{ l.proximo.data.strftime('%d/%m/%Y') }}</div>
       </div>
       <div class="tnum" style="font-size:12.5px;color:var(--ink-2)">
         {% if l.proximo.alertar_hoje %}<span style="color:var(--warn);font-weight:700">aviso hoje</span>
         {% elif l.proximo.dias_faltam == 0 %}<span style="font-weight:700">hoje</span>
         {% else %}{{ l.proximo.dias_faltam }}d{% endif %}
       </div>
-      {% else %}
-      <div style="color:var(--ink-3)">—</div>
-      <div style="color:var(--ink-3)">—</div>
-      {% endif %}
     </a>
     {% else %}
     <div style="padding:40px;text-align:center;color:var(--ink-3)">Nenhum colaborador encontrado.</div>
     {% endfor %}
   </div>
+  {% endif %}
 
 </div>
 {% endblock %}

@@ -9,6 +9,7 @@ from app.models import (
     Empresa,
     EnvioZapi,
     Funcionario,
+    Setor,
     db,
 )
 
@@ -88,6 +89,113 @@ def test_descricao_tempo_casa():
     assert tempo.descricao_tempo_casa(date(2024, 6, 30), HOJE) == "2 anos"
     assert tempo.descricao_tempo_casa(date(2025, 3, 30), HOJE) == "1 ano, 3 meses"
     assert tempo.descricao_tempo_casa(date(2026, 3, 30), HOJE) == "3 meses"
+
+
+# --------------------------------------------------------------------------- #
+# Marcos já batidos e janelas (app/tempo.py)
+# --------------------------------------------------------------------------- #
+def test_ultimo_marco_e_o_mais_recente_ja_atingido():
+    # 100 dias de casa: 45 e 90 já passaram, 120 ainda não.
+    mk = tempo.ultimo_marco(HOJE - timedelta(days=100), HOJE)
+    assert mk["label"] == "90 dias"
+    assert mk["chave"] == "90"
+    assert mk["batido"] is True
+    assert mk["dias_faltam"] == -10          # negativo: ficou para trás
+
+
+def test_ultimo_marco_pode_ser_aniversario():
+    # 1 ano e 2 meses de casa: o aniversário é mais recente que o marco de 120.
+    adm = tempo._soma_anos(HOJE, -1) - timedelta(days=60)
+    assert tempo.ultimo_marco(adm, HOJE)["label"] == "1 ano"
+
+
+def test_ultimo_marco_none_antes_dos_45_dias():
+    assert tempo.ultimo_marco(HOJE - timedelta(days=10), HOJE) is None
+    assert tempo.ultimo_marco(None, HOJE) is None
+    assert tempo.ultimo_marco(HOJE + timedelta(days=5), HOJE) is None
+
+
+def test_ultimo_marco_conta_aniversario_de_29_fev():
+    # Admissão em 29/02: o marco de 1 ano cai em 28/02 do ano seguinte e já
+    # conta como batido nesse dia (a diferença de calendário diria "0 anos").
+    assert tempo.ultimo_marco(date(2024, 2, 29), date(2025, 2, 28))["label"] == "1 ano"
+
+
+def test_marcos_no_intervalo_pega_dias_e_aniversario():
+    ini, fim = tempo.janela_mes(HOJE)                      # junho/2026
+    # 45 dias cai em 30/06 (hoje); 90 dias só em agosto.
+    marcos = tempo.marcos_no_intervalo(date(2026, 5, 16), ini, fim, HOJE)
+    assert [mk["label"] for mk in marcos] == ["45 dias"]
+    assert marcos[0]["batido"] is True
+
+    # aniversário de 6 anos em 10/06/2026, dentro da janela
+    marcos = tempo.marcos_no_intervalo(date(2020, 6, 10), ini, fim, HOJE)
+    assert [mk["label"] for mk in marcos] == ["6 anos"]
+
+
+def test_marcos_no_intervalo_vazio_e_ordenado():
+    ini, fim = tempo.janela_mes(HOJE)
+    assert tempo.marcos_no_intervalo(date(2026, 5, 20), ini, fim, HOJE) == []
+    assert tempo.marcos_no_intervalo(None, ini, fim, HOJE) == []
+
+    # Janela larga: todos os aniversários entram, em ordem (não só o próximo).
+    marcos = tempo.marcos_no_intervalo(
+        date(2020, 6, 10), date(2024, 1, 1), date(2026, 12, 31), HOJE
+    )
+    assert [mk["label"] for mk in marcos] == ["4 anos", "5 anos", "6 anos"]
+
+
+def test_resumo_marcos_separa_batidos_de_a_bater():
+    ini, fim = tempo.janela_mes(HOJE)
+    marcos = (
+        tempo.marcos_no_intervalo(date(2026, 5, 16), ini, fim, HOJE)   # 45, batido
+        + tempo.marcos_no_intervalo(date(2020, 6, 10), ini, fim, HOJE)  # aniv., batido
+        + tempo.marcos_no_intervalo(date(2026, 3, 3), ini, fim, HOJE)   # 90, batido
+    )
+    resumo = tempo.resumo_marcos(marcos)
+    assert (resumo["total"], resumo["batidos"], resumo["a_bater"]) == (3, 3, 0)
+    assert resumo["por_chave"]["45"] == {"total": 1, "batidos": 1, "a_bater": 0}
+    assert resumo["por_chave"]["120"] == {"total": 0, "batidos": 0, "a_bater": 0}
+
+    # Um marco futuro na janela do mês que vem entra como "a bater"
+    # (admitido em 01/06 → 45 dias em 16/07).
+    ini2, fim2 = tempo.janela_mes(tempo.desloca_mes(HOJE, 1))
+    futuros = tempo.marcos_no_intervalo(date(2026, 6, 1), ini2, fim2, HOJE)
+    r2 = tempo.resumo_marcos(futuros)
+    assert (r2["total"], r2["batidos"], r2["a_bater"]) == (1, 0, 1)
+    assert tempo.resumo_marcos([])["total"] == 0
+
+
+def test_descricao_desde():
+    assert tempo.descricao_desde(HOJE, HOJE) == "hoje"
+    assert tempo.descricao_desde(HOJE - timedelta(days=12), HOJE) == "há 12 dias"
+    assert tempo.descricao_desde(HOJE - timedelta(days=1), HOJE) == "há 1 dia"
+    assert tempo.descricao_desde(date(2026, 3, 30), HOJE) == "há 3 meses"
+    assert tempo.descricao_desde(date(2025, 3, 30), HOJE) == "há 1 ano, 3 meses"
+    assert tempo.descricao_desde(None, HOJE) is None
+    assert tempo.descricao_desde(HOJE + timedelta(days=1), HOJE) is None
+
+
+def test_faixa_tempo_casa_cobre_os_limites():
+    def faixa(dias_ou_data):
+        return tempo.faixa_tempo_casa(dias_ou_data, HOJE)
+
+    assert faixa(HOJE) == "0-3m"
+    assert faixa(date(2026, 4, 1)) == "0-3m"          # 2 meses
+    assert faixa(date(2026, 3, 30)) == "3-12m"        # 3 meses cravados
+    assert faixa(tempo._soma_anos(HOJE, -1)) == "1-3a"
+    assert faixa(tempo._soma_anos(HOJE, -3)) == "3-5a"
+    assert faixa(tempo._soma_anos(HOJE, -5)) == "5a-mais"
+    assert faixa(None) is None
+    assert faixa(HOJE + timedelta(days=30)) == "0-3m"  # admissão futura
+
+
+def test_janela_e_label_de_mes():
+    assert tempo.janela_mes(HOJE) == (date(2026, 6, 1), date(2026, 6, 30))
+    assert tempo.janela_mes(date(2026, 2, 10))[1] == date(2026, 2, 28)
+    assert tempo.label_mes(HOJE) == "junho/2026"
+    assert tempo.desloca_mes(HOJE, -1) == date(2026, 5, 1)
+    assert tempo.desloca_mes(date(2026, 12, 31), 1) == date(2027, 1, 1)
 
 
 # --------------------------------------------------------------------------- #
@@ -214,3 +322,121 @@ def test_pagina_lista_e_destaca_aviso(client_admin, app):
     assert "Ana Aviso".encode() in r.data
     assert "Bia Tranquila".encode() in r.data
     assert "45 dias".encode() in r.data
+
+
+@pytest.fixture
+def elenco(app):
+    """Três colaboradores com tempos de casa bem diferentes, em 2 empresas."""
+    hoje = date.today()
+    acme = Empresa(nome="ACME")
+    outra = Empresa(nome="Outra Ltda")
+    producao = Setor(nome="Produção")
+    db.session.add_all([acme, outra, producao])
+    db.session.flush()
+    pessoas = {
+        # 100 dias de casa: último marco = 90 dias (batido), próximo = 120
+        "Veterana Silva": (acme, producao, tempo._soma_anos(hoje, -6)),
+        "Novato Souza": (acme, None, hoje - timedelta(days=100)),
+        "Recem Lima": (outra, producao, hoje - timedelta(days=10)),
+    }
+    for i, (nome, (emp, setor, adm)) in enumerate(pessoas.items()):
+        db.session.add(Funcionario(
+            empresa_id=emp.id, setor_id=setor.id if setor else None,
+            codigo=str(i), nome=nome, data_admissao=adm,
+        ))
+    db.session.commit()
+    return {"acme": acme, "outra": outra, "producao": producao, "hoje": hoje}
+
+
+def _texto(client, qs=""):
+    r = client.get("/tempo-funcionarios/" + qs)
+    assert r.status_code == 200
+    return r.get_data(as_text=True)
+
+
+def test_vista_colaborador_mostra_ultimo_marco(client_admin, elenco):
+    texto = _texto(client_admin)
+    assert "Último marco" in texto
+    assert "90 dias" in texto          # último marco batido do Novato
+    assert "há " in texto              # "há N dias/meses" ao lado
+    assert "nenhum ainda" in texto     # Recem Lima, com 10 dias de casa
+
+
+def test_filtro_por_empresa_e_setor(client_admin, elenco):
+    texto = _texto(client_admin, f"?empresa={elenco['outra'].id}")
+    assert "Recem Lima" in texto
+    assert "Novato Souza" not in texto
+
+    texto = _texto(client_admin, f"?setor={elenco['producao'].id}")
+    assert "Veterana Silva" in texto
+    assert "Novato Souza" not in texto
+
+
+def test_filtro_por_faixa_de_tempo_de_casa(client_admin, elenco):
+    texto = _texto(client_admin, "?faixa=5a-mais")
+    assert "Veterana Silva" in texto
+    assert "Novato Souza" not in texto
+    assert "Recem Lima" not in texto
+
+    texto = _texto(client_admin, "?faixa=0-3m")
+    assert "Recem Lima" in texto
+    assert "Veterana Silva" not in texto
+
+
+def test_chips_de_marco_aceitam_multipla_escolha(client_admin, elenco):
+    # Próximo marco: Veterana → aniversário; Novato → 120 dias; Recem → 45 dias.
+    texto = _texto(client_admin, "?marco=120")
+    assert "Novato Souza" in texto
+    assert "Veterana Silva" not in texto
+
+    texto = _texto(client_admin, "?marco=120&marco=aniversario")
+    assert "Novato Souza" in texto
+    assert "Veterana Silva" in texto
+    assert "Recem Lima" not in texto
+
+
+def test_seletor_de_mes_muda_o_resumo(client_admin, elenco):
+    hoje = elenco["hoje"]
+    texto = _texto(client_admin, f"?mes={hoje.year:04d}-{hoje.month:02d}")
+    assert tempo.label_mes(hoje) in texto
+
+    outro = tempo.desloca_mes(hoje, 5)
+    texto = _texto(client_admin, f"?mes={outro.year:04d}-{outro.month:02d}")
+    assert tempo.label_mes(outro) in texto
+    assert "Hoje" in texto             # botão de volta ao mês corrente
+
+
+def test_mes_invalido_cai_no_mes_corrente(client_admin, elenco):
+    corrente = tempo.label_mes(elenco["hoje"])
+    for qs in ["?mes=lixo", "?mes=2026-13", "?mes=", "?mes=2026-06-30"]:
+        assert corrente in _texto(client_admin, qs), qs
+
+
+def test_vista_linha_do_tempo_mostra_marco_batido(client_admin, elenco):
+    hoje = elenco["hoje"]
+    # Mês em que o Novato bateu os 90 dias (10 dias atrás).
+    marco_90 = hoje - timedelta(days=10)
+    texto = _texto(client_admin, f"?vista=linha&mes={marco_90.year:04d}-{marco_90.month:02d}")
+    assert "Linha do tempo" in texto
+    assert "Novato Souza" in texto
+    assert "90 dias" in texto
+    assert "batido há 10d" in texto
+
+
+def test_navegacao_de_mes_preserva_os_filtros(client_admin, elenco):
+    texto = _texto(client_admin, f"?busca=Novato&empresa={elenco['acme'].id}&marco=120")
+    # As setas de mês carregam busca, empresa e chip junto.
+    assert "busca=Novato" in texto
+    assert f"empresa={elenco['acme'].id}" in texto
+    assert "marco=120" in texto
+    # E o formulário reenvia o chip/mês via hidden.
+    assert '<input type="hidden" name="marco" value="120">' in texto
+
+
+def test_so_com_marco_no_mes_restringe_a_tabela(client_admin, elenco):
+    hoje = elenco["hoje"]
+    marco_90 = hoje - timedelta(days=10)
+    qs = f"?no_mes=1&mes={marco_90.year:04d}-{marco_90.month:02d}"
+    texto = _texto(client_admin, qs)
+    assert "Novato Souza" in texto       # bateu 90 dias nesse mês
+    assert "Recem Lima" not in texto     # nenhum marco no mês
